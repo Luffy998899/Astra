@@ -110,7 +110,8 @@ export default async function migrate() {
 }
 
 // Self-invoke only when run directly (not when imported by server.js)
-if (process.argv[1] === fileURLToPath(__filename)) {
+// __filename is already a resolved path (set above), so compare directly
+if (process.argv[1] === __filename) {
   migrate().catch((err) => {
     console.error(err)
     process.exit(1)
