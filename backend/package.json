@@ -9,6 +9,9 @@
     "migrate": "node src/db/migrate.js",
     "migrate-icons": "node scripts/migrateAddIcons.js",
     "migrate-duration": "node scripts/migrateDurationTypes.js",
+    "migrate-tickets": "node scripts/migrateTickets.js",
+    "upgrade-tickets": "node scripts/upgradeTickets.js",
+    "migrate-frontpage": "node scripts/migrateFrontpage.js",
     "create-admin": "node scripts/createAdmin.js",
     "test-pterodactyl": "node scripts/testPterodactyl.js"
   },
@@ -25,6 +28,7 @@
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "node-cron": "^3.0.3",
+    "socket.io": "^4.8.3",
     "sqlite3": "^5.1.6",
     "zod": "^3.22.0"
   },

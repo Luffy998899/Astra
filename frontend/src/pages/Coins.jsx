@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import SectionHeader from "../components/SectionHeader.jsx"
-import AdsterraAds from "../components/AdsterraAds.jsx"
+import BannerAd from "../components/BannerAd.jsx"
+import NativeAd from "../components/NativeAd.jsx"
 import { api } from "../services/api.js"
 
 export default function Coins() {
@@ -11,7 +12,6 @@ export default function Coins() {
   const [claiming, setClaiming] = useState(false)
   const [cooldown, setCooldown] = useState(0)
   const [adblockDetected, setAdblockDetected] = useState(false)
-  const [adsLoaded, setAdsLoaded] = useState(false)
   const [lastClaim, setLastClaim] = useState(null)
   const [error, setError] = useState("")
   const navigate = useNavigate()
@@ -67,10 +67,6 @@ export default function Coins() {
 
   const handleClaim = async () => {
     if (cooldown > 0) return
-    if (!adsLoaded) {
-      setError("Please allow ads to load before claiming coins.")
-      return
-    }
 
     setClaiming(true)
     setError("")
@@ -117,10 +113,10 @@ export default function Coins() {
           <div className="mt-6 flex flex-wrap gap-3">
             <button
               onClick={handleClaim}
-              disabled={claiming || cooldown > 0 || adblockDetected || !adsLoaded}
+              disabled={claiming || cooldown > 0 || adblockDetected}
               className="button-3d rounded-xl bg-neon-500/20 px-4 py-3 text-sm font-semibold text-neon-200 hover:bg-neon-500/30 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {claiming ? "Claiming..." : !adsLoaded ? "Loading ads..." : "Claim now"}
+              {claiming ? "Claiming..." : "Claim now"}
             </button>
             <button className="button-3d rounded-xl border border-slate-700/60 px-4 py-3 text-sm font-semibold text-slate-200 hover:border-slate-600">
               View history
@@ -153,12 +149,16 @@ export default function Coins() {
         </div>
       </div>
       
-      {/* Ads Section */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_200px]">
-        <div>
-          <SectionHeader title="Support us" subtitle="Watch ads to continue earning" />
-          <AdsterraAds onAdStatusChange={setAdsLoaded} />
-        </div>
+      {/* Native Ad Section */}
+      <div className="rounded-2xl border border-slate-800/60 bg-ink-900/70 p-6">
+        <p className="text-xs uppercase tracking-[0.3em] text-slate-500 mb-4">Sponsored</p>
+        <NativeAd />
+      </div>
+
+      {/* Banner Ad Section */}
+      <div className="rounded-2xl border border-slate-800/60 bg-ink-900/70 p-6">
+        <p className="text-xs uppercase tracking-[0.3em] text-slate-500 mb-4">Sponsored</p>
+        <BannerAd />
       </div>
     </div>
   )

@@ -25,6 +25,9 @@ cd backend
 cp .env.example .env
 npm install
 npm run migrate
+npm run migrate-tickets
+npm run upgrade-tickets
+npm run migrate-frontpage
 npm run dev
 ```
 
@@ -35,6 +38,40 @@ npm run create-admin
 # Follow prompts to create admin account
 # Login with admin credentials to access /admin panel
 ```
+
+## Dynamic Front Page
+
+The landing page is fully editable from the admin panel — no code changes required.
+
+### Admin Pages
+- `/admin/frontpage` — Edit Hero, Features, About, Stats, and Footer sections
+- `/admin/landing-plans` — Create/edit/delete public pricing plans shown on the front page
+
+### How It Works
+- All content is stored in the `site_content` SQLite table (one row per section, JSON content)
+- Pricing plans are stored in the `landing_plans` table (separate from coin/real plans)
+- The front page fetches content from `GET /api/frontpage` and plans from `GET /api/frontpage/landing-plans`
+- Changes made by an admin are broadcast via **Socket.io** to all connected browsers instantly — no page refresh needed
+
+### API Endpoints
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/frontpage` | Public | All site content sections |
+| GET | `/api/frontpage/landing-plans` | Public | Active landing plans |
+| GET | `/api/admin/frontpage` | Admin | Same as above (admin prefill) |
+| PUT | `/api/admin/frontpage/:section` | Admin | Update a section (hero/features/about/stats/footer) |
+| GET | `/api/admin/frontpage/landing-plans` | Admin | All plans including inactive |
+| POST | `/api/admin/frontpage/landing-plans` | Admin | Create plan |
+| PUT | `/api/admin/frontpage/landing-plans/:id` | Admin | Update plan |
+| DELETE | `/api/admin/frontpage/landing-plans/:id` | Admin | Delete plan |
+| PATCH | `/api/admin/frontpage/landing-plans/:id/toggle-active` | Admin | Toggle visibility |
+| PATCH | `/api/admin/frontpage/landing-plans/:id/toggle-popular` | Admin | Toggle popular badge |
+
+### Socket.io Events
+| Event | Direction | Payload |
+|-------|-----------|---------|
+| `frontpage:update` | Server → Clients | `{ section, data }` |
+| `plans:update` | Server → Clients | `Plan[]` (active plans only) |
 
 ## Database Migrations
 
@@ -165,10 +202,10 @@ If Adsterra does not return `key`/`script` in the API response, add them manuall
 - `ADSTERRA_BANNER_KEY` and `ADSTERRA_BANNER_SCRIPT` for banner ads
 - `ADSTERRA_NATIVE_BANNER_SCRIPT` and `ADSTERRA_NATIVE_CONTAINER_ID` for native ads
 
-**Test Adsterra Configuration:**
+**Test Adsterra Configuration (requires admin JWT token):**
 ```bash
 cd backend
-curl http://localhost:4000/api/ads/test
+curl -H "Authorization: Bearer YOUR_ADMIN_TOKEN" http://localhost:4000/api/ads/test
 ```
 
 Expected output format:

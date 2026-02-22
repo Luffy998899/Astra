@@ -7,6 +7,52 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const sqlPath = path.join(__dirname, "init.sql")
 
+const DEFAULT_SITE_CONTENT = [
+  {
+    section_name: "hero",
+    content_json: JSON.stringify({
+      title: "Hosting crafted for Minecraft empires.",
+      subtitle: "Launch servers in seconds, keep renewals automatic, and protect revenue with enterprise-grade abuse prevention. Built on Pterodactyl with a modern finance engine.",
+      primaryButtonText: "Launch Dashboard",
+      primaryButtonLink: "/register",
+      secondaryButtonText: "View Plans",
+      secondaryButtonLink: "/plans",
+      backgroundImage: ""
+    })
+  },
+  {
+    section_name: "features",
+    content_json: JSON.stringify([
+      { title: "Automated Renewal", description: "Coins or balance renewals execute automatically with 12h grace protection.", icon: "Zap" },
+      { title: "Anti-Abuse Core", description: "IP-based coupon protection, flagging, and rate-limited endpoints.", icon: "ShieldCheck" },
+      { title: "Coin Economy", description: "AFK earning, coin plans, and live usage insights in one dashboard.", icon: "Coins" },
+      { title: "Pterodactyl Ready", description: "Server lifecycle actions handled securely via Admin API.", icon: "Server" }
+    ])
+  },
+  {
+    section_name: "about",
+    content_json: JSON.stringify({
+      heading: "Ready for production-grade hosting?",
+      description: "Spin up a secure dashboard and keep every server in compliance."
+    })
+  },
+  {
+    section_name: "stats",
+    content_json: JSON.stringify({
+      activeServers: "500+",
+      totalUsers: "1,200+",
+      uptime: "99.9%"
+    })
+  },
+  {
+    section_name: "footer",
+    content_json: JSON.stringify({
+      text: "© 2026 AstraNodes. All rights reserved.",
+      links: ["Privacy", "Terms", "Status"]
+    })
+  }
+]
+
 export default async function migrate() {
   try {
     console.log("[Migration] Reading init.sql from:", sqlPath)
@@ -41,6 +87,19 @@ export default async function migrate() {
       await runSync("INSERT INTO coin_settings (id, coins_per_minute) VALUES (1, 1)", [])
     } else {
       console.log("[Migration] coin_settings already exists")
+    }
+
+    // Seed default site_content sections
+    console.log("[Migration] Seeding default site_content...")
+    for (const section of DEFAULT_SITE_CONTENT) {
+      const exists = await getOne("SELECT id FROM site_content WHERE section_name = ?", [section.section_name]).catch(() => null)
+      if (!exists) {
+        await runSync(
+          "INSERT INTO site_content (section_name, content_json) VALUES (?, ?)",
+          [section.section_name, section.content_json]
+        ).catch((e) => console.warn("[Migration] site_content seed warn:", e.message))
+        console.log(`[Migration] ✓ Seeded site_content: ${section.section_name}`)
+      }
     }
 
     console.log("[Migration] ✓ Database migrated successfully")

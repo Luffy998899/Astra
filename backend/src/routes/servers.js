@@ -38,7 +38,11 @@ function getBalanceField(planType) {
 
 router.get("/", requireAuth, async (req, res, next) => {
   try {
-    const servers = await query("SELECT * FROM servers WHERE user_id = ? ORDER BY created_at DESC", [req.user.id])
+    // Only fetch servers that are not deleted
+    const servers = await query(
+      "SELECT * FROM servers WHERE user_id = ? AND status != 'deleted' ORDER BY created_at DESC",
+      [req.user.id]
+    )
     const enriched = await Promise.all(
       servers.map(async (server) => {
         const plan = await getPlan(server.plan_type, server.plan_id)
@@ -56,7 +60,11 @@ router.get("/", requireAuth, async (req, res, next) => {
 
 router.post("/purchase", requireAuth, validate(purchaseSchema), async (req, res, next) => {
   try {
-    const user = await getOne("SELECT * FROM users WHERE id = ?", [req.user.id])
+    // Only fetch the balance columns needed — never load password_hash
+    const user = await getOne(
+      "SELECT id, coins, balance, pterodactyl_user_id FROM users WHERE id = ?",
+      [req.user.id]
+    )
     const { plan_type: planType, plan_id: planId, server_name: serverName } = req.body
     const plan = await getPlan(planType, planId)
 

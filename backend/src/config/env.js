@@ -7,7 +7,7 @@ const envSchema = z.object({
   NODE_ENV: z.string().default("development"),
   PORT: z.string().default("4000"),
   FRONTEND_URL: z.string().default("http://localhost:5173"),
-  JWT_SECRET: z.string().min(10),
+  JWT_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default("7d"),
   DB_PATH: z.string().default("./data/astranodes.sqlite"),
   UPLOAD_DIR: z.string().default("./uploads"),
@@ -22,6 +22,11 @@ const envSchema = z.object({
   PTERODACTYL_DEFAULT_STARTUP: z.string().min(1),
   PTERODACTYL_DEFAULT_ENV: z.string().default("{}"),
   DISCORD_WEBHOOK_URL: z.string().min(1),
+  // Optional support webhook
+  DISCORD_SUPPORT_WEBHOOK_URL: z.string().optional(),
+  // UPI payment details shown on Billing page
+  UPI_ID: z.string().optional().default(""),
+  UPI_NAME: z.string().optional().default(""),
   ADSTERRA_API_TOKEN: z.string().min(1),
   ADSTERRA_DOMAIN_ID: z.string().min(1),
   ADSTERRA_NATIVE_BANNER_ID: z.string().optional(),

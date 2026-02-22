@@ -1,16 +1,21 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
+import { Copy, Check, IndianRupee, Upload, Clock } from "lucide-react"
 import SectionHeader from "../components/SectionHeader.jsx"
 import { api } from "../services/api.js"
+import Badge from "../components/Badge.jsx"
 
 export default function Billing() {
   const [amount, setAmount] = useState("")
   const [utrNumber, setUtrNumber] = useState("")
   const [screenshot, setScreenshot] = useState(null)
   const [submissions, setSubmissions] = useState([])
+  const [upiSettings, setUpiSettings] = useState({ upiId: null, upiName: null })
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
+  const [copied, setCopied] = useState(false)
+  const fileRef = useRef(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -20,10 +25,14 @@ export default function Billing() {
       return
     }
 
-    const loadSubmissions = async () => {
+    const load = async () => {
       try {
-        const data = await api.getUTRSubmissions(token)
-        setSubmissions(data || [])
+        const [submissionsData, paymentData] = await Promise.all([
+          api.getUTRSubmissions(token),
+          api.getPaymentSettings()
+        ])
+        setSubmissions(submissionsData || [])
+        setUpiSettings(paymentData)
       } catch (err) {
         console.error(err)
       } finally {
@@ -31,15 +40,23 @@ export default function Billing() {
       }
     }
 
-    loadSubmissions()
+    load()
   }, [navigate])
+
+  const copyUpi = () => {
+    if (!upiSettings.upiId) return
+    navigator.clipboard.writeText(upiSettings.upiId).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError("")
 
     if (!amount || !utrNumber || !screenshot) {
-      setError("Please fill in all fields and select a screenshot")
+      setError("Please fill in all fields and attach a screenshot")
       return
     }
 
@@ -47,17 +64,13 @@ export default function Billing() {
 
     try {
       const token = localStorage.getItem("token")
-      const result = await api.submitUTR(token, parseFloat(amount), utrNumber, screenshot)
-      
-      // Refresh submissions
+      await api.submitUTR(token, parseFloat(amount), utrNumber, screenshot)
       const data = await api.getUTRSubmissions(token)
       setSubmissions(data || [])
-
-      // Clear form
       setAmount("")
       setUtrNumber("")
       setScreenshot(null)
-      alert("UTR submitted successfully! Admin will review soon.")
+      if (fileRef.current) fileRef.current.value = ""
     } catch (err) {
       setError(err.message)
     } finally {
@@ -75,9 +88,53 @@ export default function Billing() {
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="UTR Billing" subtitle="Upload proof. Admin reviews in minutes." />
+      <SectionHeader title="Add Balance" subtitle="Pay via UPI, then submit your UTR number and screenshot for verification." />
+
+      {/* Step 1 — UPI Payment Details */}
+      <div className="rounded-2xl border border-aurora-500/30 bg-aurora-900/10 p-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-aurora-400 mb-4">Step 1 — Send Payment via UPI</p>
+
+        {upiSettings.upiId ? (
+          <div className="space-y-4">
+            {upiSettings.upiName && (
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Pay to</p>
+                <p className="text-lg font-semibold text-slate-100">{upiSettings.upiName}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-xs text-slate-500 mb-2">UPI ID</p>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 rounded-xl border border-aurora-500/40 bg-ink-950/60 px-4 py-3">
+                  <p className="font-mono text-lg font-semibold text-aurora-200 select-all">{upiSettings.upiId}</p>
+                </div>
+                <button
+                  onClick={copyUpi}
+                  className="flex items-center gap-2 rounded-xl border border-aurora-500/30 bg-aurora-900/20 px-4 py-3 text-sm font-semibold text-aurora-200 hover:bg-aurora-900/40 transition-all"
+                >
+                  {copied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-700/40 bg-ink-950/40 px-4 py-3 text-sm text-slate-400">
+              <p>1. Open any UPI app (GPay, PhonePe, Paytm, etc.)</p>
+              <p className="mt-1">2. Send the exact amount you want to add to your balance</p>
+              <p className="mt-1">3. Note the <span className="text-aurora-300 font-semibold">UTR / Reference number</span> from the payment receipt</p>
+              <p className="mt-1">4. Take a <span className="text-aurora-300 font-semibold">screenshot</span> of the payment confirmation</p>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-900/10 p-4 text-sm text-amber-300">
+            ⚠️ UPI payment details not configured yet. Please contact support.
+          </div>
+        )}
+      </div>
+
+      {/* Step 2 — Submit UTR */}
       <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-        <div className="glass rounded-2xl border border-slate-700/40 p-6">
+        <div className="rounded-2xl border border-slate-800/60 bg-ink-900/70 p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400 mb-5">Step 2 — Submit Your Payment Proof</p>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div className="rounded-lg bg-red-900/20 border border-red-700/30 p-3 text-sm text-red-300">
@@ -85,36 +142,53 @@ export default function Billing() {
               </div>
             )}
             <div>
-              <label className="text-xs uppercase tracking-[0.3em] text-slate-500">Amount</label>
-              <input
-                type="number"
-                step="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
-                className="mt-2 w-full rounded-xl border border-slate-700/60 bg-ink-900/70 px-4 py-3 text-sm text-slate-100 placeholder-slate-600 focus:border-aurora-500/50 focus:outline-none"
-                placeholder="₹25.00"
-              />
+              <label className="text-xs uppercase tracking-[0.3em] text-slate-500">Amount Paid (₹)</label>
+              <div className="relative mt-2">
+                <IndianRupee size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="number"
+                  step="0.01"
+                  min="1"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-slate-700/60 bg-ink-900/70 pl-9 pr-4 py-3 text-sm text-slate-100 placeholder-slate-600 focus:border-aurora-500/50 focus:outline-none"
+                  placeholder="25.00"
+                />
+              </div>
             </div>
             <div>
-              <label className="text-xs uppercase tracking-[0.3em] text-slate-500">UTR Number</label>
+              <label className="text-xs uppercase tracking-[0.3em] text-slate-500">UTR / Reference Number</label>
               <input
                 type="text"
                 value={utrNumber}
                 onChange={(e) => setUtrNumber(e.target.value)}
                 required
                 className="mt-2 w-full rounded-xl border border-slate-700/60 bg-ink-900/70 px-4 py-3 text-sm text-slate-100 placeholder-slate-600 focus:border-aurora-500/50 focus:outline-none"
-                placeholder="UTR000000"
+                placeholder="UTR000000000000"
               />
+              <p className="mt-1 text-xs text-slate-500">Found in your UPI app transaction history</p>
             </div>
             <div>
-              <label className="text-xs uppercase tracking-[0.3em] text-slate-500">Screenshot</label>
+              <label className="text-xs uppercase tracking-[0.3em] text-slate-500">Payment Screenshot</label>
+              <div
+                onClick={() => fileRef.current?.click()}
+                className="mt-2 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-700/60 bg-ink-900/40 px-4 py-6 text-sm text-slate-400 hover:border-aurora-500/40 hover:text-aurora-300 transition-colors"
+              >
+                <Upload size={20} />
+                {screenshot ? (
+                  <span className="text-aurora-300 font-medium">{screenshot.name}</span>
+                ) : (
+                  <span>Click to attach screenshot</span>
+                )}
+              </div>
               <input
+                ref={fileRef}
                 type="file"
-                accept="image/*"
-                onChange={(e) => setScreenshot(e.target.files?.[0])}
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                onChange={(e) => setScreenshot(e.target.files?.[0] || null)}
                 required
-                className="mt-2 w-full rounded-xl border border-slate-700/60 bg-ink-900/70 px-4 py-3 text-sm text-slate-100 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-100 focus:border-aurora-500/50 focus:outline-none"
+                className="hidden"
               />
             </div>
             <button
@@ -122,40 +196,46 @@ export default function Billing() {
               disabled={submitting}
               className="button-3d w-full rounded-xl bg-aurora-500/20 px-4 py-3 text-sm font-semibold text-aurora-200 hover:bg-aurora-500/30 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {submitting ? "Submitting..." : "Submit for review"}
+              {submitting ? "Submitting..." : "Submit for Review"}
             </button>
           </form>
         </div>
+
+        {/* Submission history */}
         <div className="rounded-2xl border border-slate-800/60 bg-ink-900/70 p-6">
-          <p className="text-sm text-slate-400">Recent submissions</p>
+          <div className="flex items-center gap-2 mb-4">
+            <Clock size={14} className="text-slate-500" />
+            <p className="text-sm text-slate-400">Recent Submissions</p>
+          </div>
           {submissions.length > 0 ? (
-            <div className="mt-4 space-y-3 text-sm">
+            <div className="space-y-3 text-sm">
               {submissions.map((item) => (
                 <div
                   key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800/60 bg-ink-950/60 px-4 py-3"
+                  className="rounded-xl border border-slate-800/60 bg-ink-950/60 px-4 py-3"
                 >
-                  <div>
-                    <p className="font-semibold text-slate-100">₹{item.amount.toFixed(2)}</p>
-                    <p className="text-xs text-slate-500">{item.utr_number}</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-100">₹{Number(item.amount).toFixed(2)}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 font-mono">{item.utr_number}</p>
+                    </div>
+                    <Badge
+                      label={item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                      tone={
+                        item.status === "approved" ? "approved"
+                        : item.status === "rejected" ? "rejected"
+                        : "pending"
+                      }
+                    />
                   </div>
-                  <div className="text-right">
-                    <p className={`font-semibold ${
-                      item.status === "approved" ? "text-aurora-300" :
-                      item.status === "rejected" ? "text-red-300" :
-                      "text-amber-300"
-                    }`}>
-                      {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {new Date(item.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
+                  <p className="mt-2 text-xs text-slate-600">
+                    {new Date(item.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="mt-4 text-sm text-slate-400">No submissions yet.</p>
+            <p className="text-sm text-slate-500 text-center py-8">No submissions yet</p>
           )}
         </div>
       </div>

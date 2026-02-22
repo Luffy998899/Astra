@@ -1,0 +1,530 @@
+#!/usr/bin/env bash
+# =============================================================================
+#  AstraNodes — Interactive VPS Deployment Script
+#  Supports: Ubuntu 22.04 / 24.04
+#  Usage: bash deploy.sh
+# =============================================================================
+set -euo pipefail
+
+# ── Colours ──────────────────────────────────────────────────────────────────
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+info()    { echo -e "${CYAN}[INFO]${RESET}  $*"; }
+success() { echo -e "${GREEN}[OK]${RESET}    $*"; }
+warn()    { echo -e "${YELLOW}[WARN]${RESET}  $*"; }
+error()   { echo -e "${RED}[ERROR]${RESET} $*" >&2; exit 1; }
+header()  { echo -e "\n${BOLD}${CYAN}══ $* ══${RESET}"; }
+
+ask() {
+  # ask <VAR_NAME> <prompt> [default]
+  local var="$1" prompt="$2" default="${3:-}"
+  local hint=""
+  [[ -n "$default" ]] && hint=" [${default}]"
+  while true; do
+    read -rp "$(echo -e "${YELLOW}?${RESET} ${prompt}${hint}: ")" value
+    value="${value:-$default}"
+    if [[ -n "$value" ]]; then
+      printf -v "$var" '%s' "$value"
+      return
+    fi
+    echo -e "${RED}  This field is required.${RESET}"
+  done
+}
+
+ask_optional() {
+  # ask_optional <VAR_NAME> <prompt> [default]
+  local var="$1" prompt="$2" default="${3:-}"
+  local hint=""
+  [[ -n "$default" ]] && hint=" [${default}]"
+  read -rp "$(echo -e "${YELLOW}?${RESET} ${prompt}${hint}: ")" value
+  printf -v "$var" '%s' "${value:-$default}"
+}
+
+ask_yn() {
+  # ask_yn <VAR_NAME> <prompt> <default: y|n>
+  local var="$1" prompt="$2" default="${3:-y}"
+  local choices; [[ "$default" == "y" ]] && choices="Y/n" || choices="y/N"
+  read -rp "$(echo -e "${YELLOW}?${RESET} ${prompt} [${choices}]: ")" value
+  value="${value:-$default}"
+  [[ "${value,,}" == "y" ]] && printf -v "$var" 'yes' || printf -v "$var" 'no'
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  BANNER
+# ─────────────────────────────────────────────────────────────────────────────
+clear
+echo -e "${BOLD}${CYAN}"
+echo "  ╔═══════════════════════════════════════════╗"
+echo "  ║       AstraNodes — Deploy Script          ║"
+echo "  ║   Ubuntu 22.04/24.04 · Node · Nginx · PM2 ║"
+echo "  ╚═══════════════════════════════════════════╝"
+echo -e "${RESET}"
+echo "  This script will:"
+echo "   1. Install Node.js LTS, Nginx, PM2, Certbot"
+echo "   2. Create backend + frontend config files"
+echo "   3. Build the React frontend"
+echo "   4. Run database migrations"
+echo "   5. Configure Nginx with HTTPS (Let's Encrypt)"
+echo "   6. Start the API with PM2 (auto-restart on reboot)"
+echo ""
+warn "Run as root or with sudo. Press Ctrl-C to abort."
+echo ""
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  SECTION 1 — General
+# ─────────────────────────────────────────────────────────────────────────────
+header "1 / 8  General Settings"
+
+ask DOMAIN    "Domain name (e.g. astranodes.cloud)"
+ask SSL_EMAIL "Email for Let's Encrypt SSL cert"
+ask APP_DIR   "Install directory on this server" "/opt/astranodes"
+ask APP_PORT  "Backend API port (internal, not public)" "4000"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  SECTION 2 — Secrets & Auth
+# ─────────────────────────────────────────────────────────────────────────────
+header "2 / 8  Secrets & Auth"
+
+GEN_SECRET=$(openssl rand -hex 32 2>/dev/null || tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 64)
+echo -e "  ${CYAN}Auto-generated JWT secret (press Enter to use it):${RESET}"
+echo -e "  ${GEN_SECRET}"
+ask JWT_SECRET  "JWT secret (min 32 chars, Enter = use generated)" "$GEN_SECRET"
+ask JWT_EXPIRES "JWT expiry"  "7d"
+
+if [[ ${#JWT_SECRET} -lt 32 ]]; then
+  error "JWT_SECRET must be at least 32 characters."
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  SECTION 3 — Database & Storage
+# ─────────────────────────────────────────────────────────────────────────────
+header "3 / 8  Database & Storage"
+
+ask DB_PATH     "SQLite database path" "${APP_DIR}/backend/data/astranodes.sqlite"
+ask UPLOAD_DIR  "Uploads directory"    "${APP_DIR}/backend/uploads"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  SECTION 4 — Pterodactyl
+# ─────────────────────────────────────────────────────────────────────────────
+header "4 / 8  Pterodactyl Panel"
+
+ask     PTERO_URL         "Pterodactyl panel URL (e.g. https://panel.example.com)"
+ask     PTERO_KEY         "Pterodactyl admin API key"
+ask     PTERO_NODE        "Default node ID" "1"
+ask     PTERO_EGG         "Default egg ID"  "1"
+ask_optional PTERO_ALLOC  "Default allocation ID (leave blank = auto)"  ""
+ask     PTERO_IMAGE       "Docker image" "ghcr.io/pterodactyl/yolks:java_17"
+ask     PTERO_STARTUP     "Startup command" "java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar server.jar"
+echo -e "  ${CYAN}Minecraft env vars (JSON):${RESET}"
+ask     PTERO_ENV         "Pterodactyl ENV JSON" '{"MINECRAFT_VERSION":"1.20.1","SERVER_JARFILE":"server.jar","BUILD_NUMBER":"latest"}'
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  SECTION 5 — Discord
+# ─────────────────────────────────────────────────────────────────────────────
+header "5 / 8  Discord Webhooks"
+
+ask          DISCORD_WEBHOOK         "Discord webhook URL (UTR notifications)"
+ask_optional DISCORD_SUPPORT_WEBHOOK "Discord support channel webhook (optional)" ""
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  SECTION 6 — UPI Payment
+# ─────────────────────────────────────────────────────────────────────────────
+header "6 / 8  UPI Payment Details"
+echo "  These are shown on the Billing page so users know where to send money."
+
+ask_optional UPI_ID_VAL   "UPI ID (e.g. yourname@upi)"          ""
+ask_optional UPI_NAME_VAL "UPI registered name / business name"  ""
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  SECTION 7 — Adsterra Ads
+# ─────────────────────────────────────────────────────────────────────────────
+header "7 / 8  Adsterra Monetisation"
+
+ask_optional ADSTERRA_TOKEN           "Adsterra API token"                   ""
+ask_optional ADSTERRA_DOMAIN_ID       "Adsterra domain ID"                   ""
+ask_optional ADSTERRA_NATIVE_ID       "Native banner placement ID"           ""
+ask_optional ADSTERRA_BANNER_ID       "Banner placement ID"                  ""
+ask_optional ADSTERRA_NATIVE_KEY      "Native banner placement key"          ""
+ask_optional ADSTERRA_BANNER_KEY      "Banner placement key"                 ""
+ask_optional ADSTERRA_NATIVE_SCRIPT   "Native banner script URL"             ""
+ask_optional ADSTERRA_BANNER_SCRIPT   "Banner script URL"                    ""
+ask_optional ADSTERRA_NATIVE_CONT     "Native banner container ID"           ""
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  SECTION 7 — Confirm
+# ─────────────────────────────────────────────────────────────────────────────
+header "8 / 8  Review & Confirm"
+
+echo ""
+echo -e "  ${BOLD}Domain:${RESET}       https://${DOMAIN}"
+echo -e "  ${BOLD}SSL email:${RESET}    ${SSL_EMAIL}"
+echo -e "  ${BOLD}Install dir:${RESET}  ${APP_DIR}"
+echo -e "  ${BOLD}API port:${RESET}     ${APP_PORT} (internal)"
+echo -e "  ${BOLD}DB path:${RESET}      ${DB_PATH}"
+echo -e "  ${BOLD}Uploads:${RESET}      ${UPLOAD_DIR}"
+echo -e "  ${BOLD}Pterodactyl:${RESET}  ${PTERO_URL}"
+echo ""
+ask_yn CONFIRM "Proceed with deployment?" "y"
+[[ "$CONFIRM" != "yes" ]] && { warn "Aborted."; exit 0; }
+
+# =============================================================================
+#  INSTALL PHASE
+# =============================================================================
+header "Installing system packages"
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -q
+apt-get install -y -q curl git nginx certbot python3-certbot-nginx ufw
+
+# Node.js LTS via NodeSource
+if ! command -v node &>/dev/null; then
+  info "Installing Node.js LTS..."
+  curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+  apt-get install -y -q nodejs
+else
+  success "Node.js already installed: $(node -v)"
+fi
+
+# PM2
+if ! command -v pm2 &>/dev/null; then
+  info "Installing PM2..."
+  npm install -g pm2 --quiet
+else
+  success "PM2 already installed: $(pm2 -v)"
+fi
+
+# =============================================================================
+#  CLONE / UPDATE REPO
+# =============================================================================
+header "Preparing application directory"
+
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [[ "$REPO_DIR" == "$APP_DIR" ]]; then
+  info "Already in install directory — skipping copy."
+else
+  if [[ -d "$APP_DIR/.git" ]]; then
+    info "Pulling latest changes in ${APP_DIR}..."
+    git -C "$APP_DIR" pull --ff-only
+  else
+    info "Copying files to ${APP_DIR}..."
+    mkdir -p "$APP_DIR"
+    rsync -a --exclude='.git' --exclude='node_modules' \
+      --exclude='backend/data' --exclude='backend/uploads' \
+      "${REPO_DIR}/" "${APP_DIR}/"
+  fi
+fi
+
+mkdir -p "$(dirname "$DB_PATH")" "$UPLOAD_DIR"
+
+# =============================================================================
+#  WRITE BACKEND .env
+# =============================================================================
+header "Writing backend/.env"
+
+BACKEND_ENV="${APP_DIR}/backend/.env"
+cat > "$BACKEND_ENV" <<EOF
+NODE_ENV=production
+PORT=${APP_PORT}
+FRONTEND_URL=https://${DOMAIN}
+JWT_SECRET=${JWT_SECRET}
+JWT_EXPIRES_IN=${JWT_EXPIRES}
+DB_PATH=${DB_PATH}
+UPLOAD_DIR=${UPLOAD_DIR}
+RATE_LIMIT_WINDOW=900000
+RATE_LIMIT_MAX=200
+PTERODACTYL_URL=${PTERO_URL}
+PTERODACTYL_API_KEY=${PTERO_KEY}
+PTERODACTYL_DEFAULT_NODE=${PTERO_NODE}
+PTERODACTYL_DEFAULT_EGG=${PTERO_EGG}
+PTERODACTYL_DEFAULT_ALLOCATION=${PTERO_ALLOC}
+PTERODACTYL_DEFAULT_DOCKER_IMAGE=${PTERO_IMAGE}
+PTERODACTYL_DEFAULT_STARTUP=${PTERO_STARTUP}
+PTERODACTYL_DEFAULT_ENV=${PTERO_ENV}
+DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK}
+DISCORD_SUPPORT_WEBHOOK_URL=${DISCORD_SUPPORT_WEBHOOK}
+UPI_ID=${UPI_ID_VAL}
+UPI_NAME=${UPI_NAME_VAL}
+ADSTERRA_API_TOKEN=${ADSTERRA_TOKEN}
+ADSTERRA_DOMAIN_ID=${ADSTERRA_DOMAIN_ID}
+ADSTERRA_NATIVE_BANNER_ID=${ADSTERRA_NATIVE_ID}
+ADSTERRA_BANNER_ID=${ADSTERRA_BANNER_ID}
+ADSTERRA_NATIVE_BANNER_KEY=${ADSTERRA_NATIVE_KEY}
+ADSTERRA_BANNER_KEY=${ADSTERRA_BANNER_KEY}
+ADSTERRA_NATIVE_BANNER_SCRIPT=${ADSTERRA_NATIVE_SCRIPT}
+ADSTERRA_BANNER_SCRIPT=${ADSTERRA_BANNER_SCRIPT}
+ADSTERRA_NATIVE_CONTAINER_ID=${ADSTERRA_NATIVE_CONT}
+EOF
+chmod 600 "$BACKEND_ENV"
+success "Backend .env written (chmod 600)"
+
+# =============================================================================
+#  WRITE FRONTEND .env.production
+# =============================================================================
+header "Writing frontend/.env.production"
+
+cat > "${APP_DIR}/frontend/.env.production" <<EOF
+VITE_API_URL=https://${DOMAIN}/api
+VITE_SOCKET_URL=https://${DOMAIN}
+EOF
+success "Frontend .env.production written"
+
+# =============================================================================
+#  INSTALL DEPENDENCIES
+# =============================================================================
+header "Installing dependencies"
+
+info "Backend npm install..."
+npm --prefix "${APP_DIR}/backend" install --omit=dev --quiet
+
+info "Frontend npm install..."
+npm --prefix "${APP_DIR}/frontend" install --quiet
+
+# =============================================================================
+#  DATABASE MIGRATIONS
+# =============================================================================
+header "Running database migrations"
+
+# Run all migrations in order
+for script in migrate migrate-tickets upgrade-tickets migrate-frontpage; do
+  if npm --prefix "${APP_DIR}/backend" run "$script" -- --if-present 2>/dev/null; then
+    success "${script} OK"
+  else
+    # try direct run (non-zero exit if script doesn't exist is acceptable)
+    npm --prefix "${APP_DIR}/backend" run "$script" 2>&1 || warn "${script} skipped or errored (check output above)"
+  fi
+done
+
+# =============================================================================
+#  BUILD FRONTEND
+# =============================================================================
+header "Building React frontend"
+
+npm --prefix "${APP_DIR}/frontend" run build
+FRONTEND_DIST="${APP_DIR}/frontend/dist"
+success "Frontend built → ${FRONTEND_DIST}"
+
+# Web root for Nginx
+WEB_ROOT="/var/www/astranodes"
+mkdir -p "$WEB_ROOT"
+rsync -a --delete "${FRONTEND_DIST}/" "${WEB_ROOT}/"
+success "Frontend files copied to ${WEB_ROOT}"
+
+# =============================================================================
+#  PM2 ECOSYSTEM CONFIG
+# =============================================================================
+header "Writing PM2 ecosystem config"
+
+mkdir -p /var/log/pm2
+
+cat > "${APP_DIR}/ecosystem.config.cjs" <<'ECOSYSTEM'
+// PM2 Ecosystem — AstraNodes
+// SQLite requires fork mode (single writer — do NOT use cluster)
+module.exports = {
+  apps: [
+    {
+      name: "astranodes-api",
+      script: "./backend/src/server.js",
+      exec_mode: "fork",
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "512M",
+      restart_delay: 3000,
+      max_restarts: 10,
+      env_production: {
+        NODE_ENV: "production",
+      },
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+      error_file: "/var/log/pm2/astranodes-error.log",
+      out_file:   "/var/log/pm2/astranodes-out.log",
+      merge_logs: true,
+    },
+  ],
+}
+ECOSYSTEM
+
+success "ecosystem.config.cjs written"
+
+# =============================================================================
+#  NGINX CONFIG
+# =============================================================================
+header "Writing Nginx configuration"
+
+NGINX_CONF="/etc/nginx/sites-available/astranodes"
+
+cat > "$NGINX_CONF" <<NGINXCONF
+# AstraNodes — Nginx config for ${DOMAIN}
+# HTTP → HTTPS redirect (Certbot will update this block)
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN} www.${DOMAIN};
+
+    # Let's Encrypt challenge
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
+# HTTPS — main site
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name ${DOMAIN} www.${DOMAIN};
+
+    # SSL — Certbot will fill these paths in
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Security headers
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+    add_header X-Content-Type-Options    "nosniff" always;
+    add_header X-Frame-Options           "SAMEORIGIN" always;
+    add_header Referrer-Policy           "strict-origin-when-cross-origin" always;
+
+    # ── API reverse proxy ──────────────────────────────────────────────────
+    location /api/ {
+        proxy_pass         http://127.0.0.1:${APP_PORT}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 60s;
+        client_max_body_size 10M;
+    }
+
+    # ── Socket.io ──────────────────────────────────────────────────────────
+    location /socket.io/ {
+        proxy_pass         http://127.0.0.1:${APP_PORT}/socket.io/;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    \$http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host       \$host;
+        proxy_set_header   X-Real-IP  \$remote_addr;
+        proxy_read_timeout 86400s;
+    }
+
+    # ── Uploaded files ─────────────────────────────────────────────────────
+    location /uploads/ {
+        proxy_pass       http://127.0.0.1:${APP_PORT}/uploads/;
+        proxy_set_header Host \$host;
+    }
+
+    # ── Block direct access to SQLite DB ──────────────────────────────────
+    location ~* \.sqlite3?\$ {
+        deny all;
+    }
+
+    # ── React SPA (frontend) ──────────────────────────────────────────────
+    root  ${WEB_ROOT};
+    index index.html;
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2|woff|ttf|eot)\$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+}
+NGINXCONF
+
+# Enable site
+ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/astranodes
+rm -f /etc/nginx/sites-enabled/default
+
+nginx -t && success "Nginx config valid"
+
+# =============================================================================
+#  FIREWALL (UFW)
+# =============================================================================
+header "Configuring UFW firewall"
+
+ufw allow OpenSSH    > /dev/null
+ufw allow 'Nginx Full' > /dev/null
+# Internal port must NOT be public
+ufw deny "${APP_PORT}" > /dev/null 2>&1 || true
+ufw --force enable > /dev/null
+success "UFW enabled  (SSH + HTTP/HTTPS open, port ${APP_PORT} blocked externally)"
+
+# =============================================================================
+#  CERTBOT — Let's Encrypt SSL
+# =============================================================================
+header "Obtaining SSL certificate via Let's Encrypt"
+
+# Ensure Nginx is running so HTTP challenge works
+systemctl start nginx
+systemctl enable nginx
+
+certbot --nginx \
+  --non-interactive \
+  --agree-tos \
+  --redirect \
+  -m "$SSL_EMAIL" \
+  -d "$DOMAIN" \
+  -d "www.${DOMAIN}" \
+  || warn "Certbot failed for www.${DOMAIN} — retrying without www..."
+
+if [[ $? -ne 0 ]]; then
+  certbot --nginx \
+    --non-interactive \
+    --agree-tos \
+    --redirect \
+    -m "$SSL_EMAIL" \
+    -d "$DOMAIN"
+fi
+
+success "SSL certificate obtained"
+
+# Auto-renew cron (certbot installs one, but add a timer check)
+systemctl enable --now certbot.timer 2>/dev/null || true
+
+# =============================================================================
+#  START WITH PM2
+# =============================================================================
+header "Starting API with PM2"
+
+cd "$APP_DIR"
+
+# Stop any existing instance
+pm2 delete astranodes-api 2>/dev/null || true
+
+pm2 start ecosystem.config.cjs --env production
+pm2 save
+
+# Set up PM2 to start on reboot
+pm2 startup systemd -u root --hp /root | tail -1 | bash || true
+
+success "PM2 started and saved"
+
+# Reload Nginx to pick up final Certbot changes
+systemctl reload nginx
+
+# =============================================================================
+#  DONE
+# =============================================================================
+echo ""
+echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════${RESET}"
+echo -e "${BOLD}${GREEN}  Deployment complete!${RESET}"
+echo -e "${BOLD}${GREEN}═══════════════════════════════════════════════════${RESET}"
+echo ""
+echo -e "  ${BOLD}Site:${RESET}         https://${DOMAIN}"
+echo -e "  ${BOLD}API health:${RESET}   https://${DOMAIN}/api/health"
+echo -e "  ${BOLD}PM2 status:${RESET}   pm2 status"
+echo -e "  ${BOLD}API logs:${RESET}     pm2 logs astranodes-api"
+echo -e "  ${BOLD}Nginx logs:${RESET}   tail -f /var/log/nginx/error.log"
+echo ""
+echo -e "  ${CYAN}To create an admin account:${RESET}"
+echo -e "  cd ${APP_DIR} && npm --prefix backend run create-admin"
+echo ""

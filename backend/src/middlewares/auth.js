@@ -7,11 +7,19 @@ export async function requireAuth(req, res, next) {
     return res.status(401).json({ error: "Missing authorization header" })
   }
 
-  const token = header.replace("Bearer ", "")
+  if (!header.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Invalid authorization format" })
+  }
+
+  const token = header.slice(7)
 
   try {
     const payload = verifyToken(token)
-    const user = await getOne("SELECT * FROM users WHERE id = ?", [payload.sub])
+    // Never load password_hash into req.user - select only safe columns
+    const user = await getOne(
+      "SELECT id, email, role, coins, balance, flagged, pterodactyl_user_id FROM users WHERE id = ?",
+      [payload.sub]
+    )
 
     if (!user) {
       return res.status(401).json({ error: "Invalid token" })

@@ -1,7 +1,6 @@
 import { Router } from "express"
 import { z } from "zod"
 import multer from "multer"
-import path from "path"
 import fs from "fs"
 import crypto from "crypto"
 import { validate } from "../middlewares/validate.js"
@@ -16,12 +15,21 @@ if (!fs.existsSync(env.UPLOAD_DIR)) {
   fs.mkdirSync(env.UPLOAD_DIR, { recursive: true })
 }
 
+// Strict allowlist — SVG is intentionally excluded (it can carry inline JS)
+const ALLOWED_MIMETYPES = new Map([
+  ["image/jpeg", ".jpg"],
+  ["image/jpg",  ".jpg"],
+  ["image/png",  ".png"],
+  ["image/webp", ".webp"]
+])
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, env.UPLOAD_DIR)
   },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname)
+    // Derive extension from MIME type only — never trust originalname
+    const ext = ALLOWED_MIMETYPES.get(file.mimetype.toLowerCase()) || ".jpg"
     const name = crypto.randomBytes(16).toString("hex")
     cb(null, `${name}${ext}`)
   }
@@ -31,8 +39,8 @@ const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (!file.mimetype.startsWith("image/")) {
-      return cb(new Error("Invalid file type"))
+    if (!ALLOWED_MIMETYPES.has(file.mimetype.toLowerCase())) {
+      return cb(new Error("Invalid file type. Only JPEG, PNG, and WebP are allowed."))
     }
     cb(null, true)
   }

@@ -7,6 +7,11 @@ import couponRoutes from "./coupons.js"
 import billingRoutes from "./billing.js"
 import adminRoutes from "./admin.js"
 import adsRoutes from "./ads.js"
+import ticketRoutes from "./tickets.js"
+import adminTicketRoutes from "./adminTickets.js"
+import frontpageRoutes from "./frontpage.js"
+import adminFrontpageRoutes from "./adminFrontpage.js"
+import settingsRoutes from "./settings.js"
 
 const router = Router()
 
@@ -18,5 +23,10 @@ router.use("/coupons", couponRoutes)
 router.use("/billing", billingRoutes)
 router.use("/admin", adminRoutes)
 router.use("/ads", adsRoutes)
+router.use("/tickets", ticketRoutes)
+router.use("/admin/tickets", adminTicketRoutes)
+router.use("/frontpage", frontpageRoutes)
+router.use("/admin/frontpage", adminFrontpageRoutes)
+router.use("/settings", settingsRoutes)
 
 export default router

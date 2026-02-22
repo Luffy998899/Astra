@@ -1,5 +1,6 @@
 import { Router } from "express"
 import { adsterra } from "../services/adsterra.js"
+import { requireAuth, requireAdmin } from "../middlewares/auth.js"
 
 const router = Router()
 
@@ -59,7 +60,7 @@ router.get("/coins", async (req, res, next) => {
  * Test Adsterra configuration
  * Admin only (for debugging)
  */
-router.get("/test", async (req, res, next) => {
+router.get("/test", requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const placements = await adsterra.validateConfig()
     

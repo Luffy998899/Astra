@@ -29,6 +29,10 @@ db.run("PRAGMA foreign_keys=ON", (err) => {
   if (err) console.error("[DB] Foreign keys error:", err)
   else console.log("[DB] ✓ Foreign keys enabled")
 })
+db.run("PRAGMA secure_delete=ON", (err) => {
+  if (err) console.error("[DB] Secure delete error:", err)
+  else console.log("[DB] ✓ Secure delete enabled")
+})
 
 // Promise-based wrapper for db.all()
 export function query(sql, params = []) {

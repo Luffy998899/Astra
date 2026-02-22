@@ -2,10 +2,15 @@ import express from "express"
 import helmet from "helmet"
 import morgan from "morgan"
 import cors from "cors"
+import { fileURLToPath } from "url"
+import { dirname, join } from "path"
 import { env } from "./config/env.js"
 import { rateLimiter } from "./middlewares/rateLimit.js"
 import { errorHandler } from "./middlewares/errorHandler.js"
 import routes from "./routes/index.js"
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 const app = express()
 
@@ -42,14 +47,36 @@ const corsOptions = {
 
 app.use(cors(corsOptions))
 
-// Helmet configuration - disable CSP in development to avoid CORS interference
+// Helmet configuration with Adsterra CSP support
 app.use(helmet({
-  contentSecurityPolicy: env.NODE_ENV === "development" ? false : true,
+  contentSecurityPolicy: env.NODE_ENV === "development" ? false : {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://www.highperformanceformat.com",
+        "https://pl28770653.effectivegatecpm.com",
+        "https://pl28771198.effectivegatecpm.com"
+      ],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],
+      connectSrc: ["'self'", "https:"],
+      frameSrc: ["'self'", "https:"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: []
+    }
+  },
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }))
 app.use(express.json({ limit: "2mb" }))
-app.use(morgan("dev"))
+app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"))
 app.use(rateLimiter)
+
+// Serve uploaded ticket images statically
+const uploadsPath = join(__dirname, "../uploads")
+app.use("/uploads", express.static(uploadsPath))
+console.log("[Server] Serving static files from:", uploadsPath)
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "astranodes-api" })

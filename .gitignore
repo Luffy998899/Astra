@@ -1,1 +1,38 @@
 node_modules/
+# Environment files - NEVER commit these
+.env
+.env.local
+.env.production
+.env.staging
+backend/.env
+frontend/.env
+
+# SQLite databases
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+backend/data/
+
+# Backups
+*.bak
+*.db.bak
+
+# Upload files
+backend/uploads/
+uploads/
+
+# Build artifacts
+dist/
+build/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -96,3 +96,28 @@ CREATE INDEX IF NOT EXISTS idx_servers_status ON servers(status);
 CREATE INDEX IF NOT EXISTS idx_servers_expiry ON servers(expires_at);
 CREATE INDEX IF NOT EXISTS idx_coupons_code ON coupons(code);
 CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_coupon ON coupon_redemptions(coupon_id);
+
+-- ─── Dynamic Front Page ──────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS site_content (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  section_name TEXT NOT NULL UNIQUE,
+  content_json TEXT NOT NULL DEFAULT '{}',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS landing_plans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  price REAL NOT NULL DEFAULT 0,
+  ram INTEGER NOT NULL DEFAULT 1,
+  cpu INTEGER NOT NULL DEFAULT 1,
+  storage INTEGER NOT NULL DEFAULT 10,
+  features TEXT NOT NULL DEFAULT '[]',
+  popular INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_landing_plans_active ON landing_plans(active);

@@ -1,7 +1,9 @@
+import http from "http"
 import app from "./app.js"
 import { env } from "./config/env.js"
 import migrate from "./db/migrate.js"
 import { startExpiryCron } from "./cron/expiryCron.js"
+import { initSocket } from "./utils/socket.js"
 
 async function startup() {
   try {
@@ -9,8 +11,16 @@ async function startup() {
     await migrate()
     console.log("[Server] Migration complete, starting server...")
 
-    const server = app.listen(env.PORT, () => {
-      console.log(`[Server] ✓ AstraNodes API listening on port ${env.PORT}`)
+    const httpServer = http.createServer(app)
+
+    const allowedOrigins = env.NODE_ENV === "production"
+      ? [env.FRONTEND_URL]
+      : true  // allow all origins in development
+
+    initSocket(httpServer, allowedOrigins)
+
+    httpServer.listen(env.PORT, "0.0.0.0", () => {
+      console.log(`[Server] ✓ AstraNodes API listening on 0.0.0.0:${env.PORT}`)
       console.log(`[Server] ✓ Health endpoint: http://localhost:${env.PORT}/health`)
     })
 

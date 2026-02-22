@@ -51,6 +51,7 @@ export default function AdminPanel() {
   const [utrs, setUtrs] = useState([])
   const [coinPlans, setCoinPlans] = useState([])
   const [realPlans, setRealPlans] = useState([])
+  const [coupons, setCoupons] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [flagging, setFlagging] = useState({})
@@ -61,6 +62,10 @@ export default function AdminPanel() {
   const [planForm, setPlanForm] = useState({})
   const [savingPlan, setSavingPlan] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, type: null, id: null })
+  const [couponModal, setCouponModal] = useState({ open: false, mode: 'create', data: null })
+  const [couponForm, setCouponForm] = useState({})
+  const [savingCoupon, setSavingCoupon] = useState(false)
+  const [deletingCoupon, setDeletingCoupon] = useState({})
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -72,12 +77,13 @@ export default function AdminPanel() {
 
     const loadAdminData = async () => {
       try {
-        const [usersData, serversData, utrsData, coinPlansData, realPlansData] = await Promise.all([
+        const [usersData, serversData, utrsData, coinPlansData, realPlansData, couponsData] = await Promise.all([
           api.getUsers(token),
           api.getServers(token),
           api.getUTRSubmissionsAdmin(token),
           api.getCoinPlans(),
-          api.getRealPlans()
+          api.getRealPlans(),
+          api.getCoupons(token)
         ])
 
         setUsers(usersData || [])
@@ -85,6 +91,7 @@ export default function AdminPanel() {
         setUtrs(utrsData || [])
         setCoinPlans(coinPlansData || [])
         setRealPlans(realPlansData || [])
+        setCoupons(couponsData || [])
       } catch (err) {
         setError(err.message)
       } finally {
@@ -269,6 +276,72 @@ export default function AdminPanel() {
     }
   }
 
+  // ── Coupon handlers ────────────────────────────────────────────────────────
+
+  const openCouponModal = (mode, data = null) => {
+    if (mode === 'edit' && data) {
+      setCouponForm({
+        ...data,
+        // Format datetime-local compatible string from stored value
+        expires_at: data.expires_at ? data.expires_at.slice(0, 16) : ''
+      })
+    } else {
+      // Default expiry: 7 days from now
+      const d = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      const defaultExpiry = d.toISOString().slice(0, 16)
+      setCouponForm({ code: '', coin_reward: '', max_uses: '', per_user_limit: 1, expires_at: defaultExpiry, active: true })
+    }
+    setCouponModal({ open: true, mode, data })
+  }
+
+  const closeCouponModal = () => {
+    setCouponModal({ open: false, mode: 'create', data: null })
+    setCouponForm({})
+    setError("")
+  }
+
+  const handleSaveCoupon = async (e) => {
+    e.preventDefault()
+    setSavingCoupon(true)
+    setError("")
+    try {
+      const token = localStorage.getItem("token")
+      const payload = {
+        code: couponForm.code.toUpperCase().trim(),
+        coin_reward: parseInt(couponForm.coin_reward),
+        max_uses: parseInt(couponForm.max_uses),
+        per_user_limit: parseInt(couponForm.per_user_limit) || 1,
+        expires_at: couponForm.expires_at,
+        active: Boolean(couponForm.active)
+      }
+      if (couponModal.mode === 'create') {
+        await api.createCoupon(token, payload)
+      } else {
+        await api.updateCoupon(token, couponModal.data.id, payload)
+      }
+      setCoupons(await api.getCoupons(token))
+      closeCouponModal()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSavingCoupon(false)
+    }
+  }
+
+  const handleDeleteCoupon = async (id) => {
+    if (!confirm("Delete this coupon code? Users will no longer be able to redeem it.")) return
+    setDeletingCoupon((prev) => ({ ...prev, [id]: true }))
+    try {
+      const token = localStorage.getItem("token")
+      await api.deleteCoupon(token, id)
+      setCoupons((prev) => prev.filter((c) => c.id !== id))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeletingCoupon((prev) => ({ ...prev, [id]: false }))
+    }
+  }
+
   const handleApproveUTR = async (utrId) => {
     setApproving((prev) => ({ ...prev, [`approve-${utrId}`]: true }))
     setError("")
@@ -318,6 +391,14 @@ export default function AdminPanel() {
       <SectionHeader
         title="Admin Panel"
         subtitle="Monitor users, plans, coupons, and server lifecycle events."
+        action={
+          <button
+            onClick={() => navigate("/admin/tickets")}
+            className="button-3d rounded-xl bg-aurora-500/20 border border-aurora-500/30 px-4 py-2 text-sm font-semibold text-aurora-200 hover:bg-aurora-500/30"
+          >
+            Manage Tickets
+          </button>
+        }
       />
 
       {error && (
@@ -328,7 +409,7 @@ export default function AdminPanel() {
 
       {/* Tab Navigation */}
       <div className="flex gap-2 border-b border-slate-800/60">
-        {["users", "servers", "utr", "plans"].map((t) => (
+        {["users", "servers", "utr", "plans", "coupons"].map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -338,13 +419,11 @@ export default function AdminPanel() {
                 : "text-slate-400 hover:text-slate-300"
             }`}
           >
-            {t === "users"
-              ? "Users"
-              : t === "servers"
-              ? "Servers"
-              : t === "utr"
-              ? "UTR Submissions"
-              : "Plans"}
+            {t === "users" ? "Users"
+              : t === "servers" ? "Servers"
+              : t === "utr" ? "UTR Submissions"
+              : t === "plans" ? "Plans"
+              : "Coupon Codes"}
           </button>
         ))}
       </div>
@@ -611,6 +690,358 @@ export default function AdminPanel() {
                 <p className="text-slate-400 text-center py-8">No real money plans yet</p>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Coupons Tab */}
+      {tab === "coupons" && (
+        <div className="rounded-2xl border border-slate-800/60 bg-ink-900/70 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-slate-400">Total Codes: {coupons.length}</p>
+            <button
+              onClick={() => openCouponModal('create')}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-aurora-900/30 hover:bg-aurora-900/50 text-aurora-200 transition-all duration-200 hover:scale-105"
+            >
+              <Plus size={16} />
+              New Code
+            </button>
+          </div>
+          <div className="space-y-3">
+            {coupons.map((c) => (
+              <div
+                key={c.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800/60 bg-ink-950/60 px-4 py-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-mono font-bold text-slate-100 tracking-widest">{c.code}</p>
+                    {!c.active && <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">Inactive</span>}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    <span className="text-neon-300 font-semibold">{c.coin_reward} coins</span>
+                    {" · "}
+                    Uses: {c.times_used ?? 0} / {c.max_uses}
+                    {" · "}
+                    Per user: {c.per_user_limit}
+                    {" · "}
+                    Expires: {c.expires_at ? new Date(c.expires_at).toLocaleDateString() : "—"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openCouponModal('edit', c)}
+                    className="p-2 rounded bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 transition-colors"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCoupon(c.id)}
+                    disabled={deletingCoupon[c.id]}
+                    className="p-2 rounded bg-red-900/20 hover:bg-red-900/40 text-red-300 transition-colors disabled:opacity-60"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {coupons.length === 0 && (
+              <p className="text-slate-400 text-center py-8">No coupon codes yet — create one above</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Coupon Create/Edit Modal */}
+      {couponModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-800/60 bg-ink-900 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-slate-100">
+                {couponModal.mode === 'create' ? 'New Coupon Code' : 'Edit Coupon Code'}
+              </h3>
+              <button onClick={closeCouponModal} className="p-2 rounded-lg hover:bg-slate-800/60 text-slate-400 hover:text-slate-300">
+                <X size={20} />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mb-4 rounded-lg bg-red-900/20 border border-red-700/30 p-3 text-sm text-red-300">{error}</div>
+            )}
+
+            <form onSubmit={handleSaveCoupon} className="space-y-4">
+              {/* Code */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Code</label>
+                <input
+                  type="text"
+                  value={couponForm.code || ''}
+                  onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                  placeholder="e.g. LAUNCH50"
+                  required
+                  className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 font-mono placeholder-slate-500 focus:outline-none focus:border-aurora-500/50"
+                />
+              </div>
+
+              {/* Coins */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Coins to Give</label>
+                <input
+                  type="number"
+                  value={couponForm.coin_reward || ''}
+                  onChange={(e) => setCouponForm({ ...couponForm, coin_reward: e.target.value })}
+                  placeholder="500"
+                  required
+                  min="1"
+                  className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-aurora-500/50"
+                />
+              </div>
+
+              {/* Use limits row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Total Use Limit</label>
+                  <input
+                    type="number"
+                    value={couponForm.max_uses || ''}
+                    onChange={(e) => setCouponForm({ ...couponForm, max_uses: e.target.value })}
+                    placeholder="100"
+                    required
+                    min="1"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-aurora-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Per-User Limit</label>
+                  <input
+                    type="number"
+                    value={couponForm.per_user_limit || 1}
+                    onChange={(e) => setCouponForm({ ...couponForm, per_user_limit: e.target.value })}
+                    placeholder="1"
+                    required
+                    min="1"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-aurora-500/50"
+                  />
+                </div>
+              </div>
+
+              {/* Expiry */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Expiry Date &amp; Time</label>
+                <input
+                  type="datetime-local"
+                  value={couponForm.expires_at || ''}
+                  onChange={(e) => setCouponForm({ ...couponForm, expires_at: e.target.value })}
+                  required
+                  className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 focus:outline-none focus:border-aurora-500/50"
+                />
+              </div>
+
+              {/* Active toggle */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(couponForm.active)}
+                  onChange={(e) => setCouponForm({ ...couponForm, active: e.target.checked })}
+                  className="rounded border-slate-700/50 bg-ink-950/60 text-aurora-500 focus:ring-aurora-500/50"
+                />
+                <span className="text-sm font-medium text-slate-300">Active (users can redeem)</span>
+              </label>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={savingCoupon}
+                  className="flex-1 px-6 py-3 rounded-lg bg-aurora-900/30 hover:bg-aurora-900/50 text-aurora-200 font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {savingCoupon ? 'Saving...' : couponModal.mode === 'create' ? 'Create Code' : 'Update Code'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeCouponModal}
+                  disabled={savingCoupon}
+                  className="px-6 py-3 rounded-lg bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 font-semibold transition-colors disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Coupons Tab */}
+      {tab === "coupons" && (
+        <div className="rounded-2xl border border-slate-800/60 bg-ink-900/70 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-slate-400">Total Codes: {coupons.length}</p>
+            <button
+              onClick={() => openCouponModal('create')}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-aurora-900/30 hover:bg-aurora-900/50 text-aurora-200 transition-all duration-200 hover:scale-105"
+            >
+              <Plus size={16} />
+              New Code
+            </button>
+          </div>
+          <div className="space-y-3">
+            {coupons.map((c) => (
+              <div
+                key={c.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800/60 bg-ink-950/60 px-4 py-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-mono font-bold text-slate-100 tracking-widest">{c.code}</p>
+                    {!c.active && <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">Inactive</span>}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    <span className="text-neon-300 font-semibold">{c.coin_reward} coins</span>
+                    {" · "}
+                    Uses: {c.times_used ?? 0} / {c.max_uses}
+                    {" · "}
+                    Per user: {c.per_user_limit}
+                    {" · "}
+                    Expires: {c.expires_at ? new Date(c.expires_at).toLocaleDateString() : "—"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openCouponModal('edit', c)}
+                    className="p-2 rounded bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 transition-colors"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCoupon(c.id)}
+                    disabled={deletingCoupon[c.id]}
+                    className="p-2 rounded bg-red-900/20 hover:bg-red-900/40 text-red-300 transition-colors disabled:opacity-60"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {coupons.length === 0 && (
+              <p className="text-slate-400 text-center py-8">No coupon codes yet — create one above</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Coupon Create/Edit Modal */}
+      {couponModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-800/60 bg-ink-900 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-slate-100">
+                {couponModal.mode === 'create' ? 'New Coupon Code' : 'Edit Coupon Code'}
+              </h3>
+              <button onClick={closeCouponModal} className="p-2 rounded-lg hover:bg-slate-800/60 text-slate-400 hover:text-slate-300">
+                <X size={20} />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mb-4 rounded-lg bg-red-900/20 border border-red-700/30 p-3 text-sm text-red-300">{error}</div>
+            )}
+
+            <form onSubmit={handleSaveCoupon} className="space-y-4">
+              {/* Code */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Code</label>
+                <input
+                  type="text"
+                  value={couponForm.code || ''}
+                  onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                  placeholder="e.g. LAUNCH50"
+                  required
+                  className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 font-mono placeholder-slate-500 focus:outline-none focus:border-aurora-500/50"
+                />
+              </div>
+
+              {/* Coins */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Coins to Give</label>
+                <input
+                  type="number"
+                  value={couponForm.coin_reward || ''}
+                  onChange={(e) => setCouponForm({ ...couponForm, coin_reward: e.target.value })}
+                  placeholder="500"
+                  required
+                  min="1"
+                  className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-aurora-500/50"
+                />
+              </div>
+
+              {/* Use limits */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Total Use Limit</label>
+                  <input
+                    type="number"
+                    value={couponForm.max_uses || ''}
+                    onChange={(e) => setCouponForm({ ...couponForm, max_uses: e.target.value })}
+                    placeholder="100"
+                    required
+                    min="1"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-aurora-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Per-User Limit</label>
+                  <input
+                    type="number"
+                    value={couponForm.per_user_limit || 1}
+                    onChange={(e) => setCouponForm({ ...couponForm, per_user_limit: e.target.value })}
+                    placeholder="1"
+                    required
+                    min="1"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-aurora-500/50"
+                  />
+                </div>
+              </div>
+
+              {/* Expiry */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Expiry Date &amp; Time</label>
+                <input
+                  type="datetime-local"
+                  value={couponForm.expires_at || ''}
+                  onChange={(e) => setCouponForm({ ...couponForm, expires_at: e.target.value })}
+                  required
+                  className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 focus:outline-none focus:border-aurora-500/50"
+                />
+              </div>
+
+              {/* Active toggle */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(couponForm.active)}
+                  onChange={(e) => setCouponForm({ ...couponForm, active: e.target.checked })}
+                  className="rounded border-slate-700/50 bg-ink-950/60 text-aurora-500 focus:ring-aurora-500/50"
+                />
+                <span className="text-sm font-medium text-slate-300">Active (users can redeem)</span>
+              </label>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={savingCoupon}
+                  className="flex-1 px-6 py-3 rounded-lg bg-aurora-900/30 hover:bg-aurora-900/50 text-aurora-200 font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {savingCoupon ? 'Saving...' : couponModal.mode === 'create' ? 'Create Code' : 'Update Code'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeCouponModal}
+                  disabled={savingCoupon}
+                  className="px-6 py-3 rounded-lg bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 font-semibold transition-colors disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

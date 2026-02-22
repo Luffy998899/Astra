@@ -46,7 +46,7 @@ const couponSchema = z.object({
     code: z.string().min(3),
     coin_reward: z.number().int().positive(),
     max_uses: z.number().int().positive(),
-    per_user_limit: z.number().int().positive(),
+    per_user_limit: z.number().int().positive().default(1),
     expires_at: z.string().min(5),
     active: z.boolean().default(true)
   })
@@ -203,6 +203,21 @@ router.delete("/plans/real/:id", async (req, res, next) => {
   }
 })
 
+router.get("/coupons", async (req, res, next) => {
+  try {
+    const coupons = await query(
+      `SELECT c.*, COUNT(cr.id) AS times_used
+       FROM coupons c
+       LEFT JOIN coupon_redemptions cr ON cr.coupon_id = c.id
+       GROUP BY c.id
+       ORDER BY c.id DESC`
+    )
+    res.json(coupons)
+  } catch (error) {
+    next(error)
+  }
+})
+
 router.post("/coupons", validate(couponSchema), async (req, res, next) => {
   try {
     const info = await runSync(
@@ -236,6 +251,15 @@ router.put("/coupons/:id", validate(couponSchema), async (req, res, next) => {
         req.params.id
       ]
     )
+    res.json({ status: "ok" })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.delete("/coupons/:id", async (req, res, next) => {
+  try {
+    await runSync("DELETE FROM coupons WHERE id = ?", [req.params.id])
     res.json({ status: "ok" })
   } catch (error) {
     next(error)

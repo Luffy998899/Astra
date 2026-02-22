@@ -5,6 +5,7 @@ import { query, getOne, runSync } from "../config/db.js"
 import { hashPassword, verifyPassword } from "../utils/password.js"
 import { signToken } from "../utils/jwt.js"
 import { pterodactyl } from "../services/pterodactyl.js"
+import { authRateLimiter } from "../middlewares/rateLimit.js"
 
 const router = Router()
 
@@ -15,7 +16,7 @@ const authSchema = z.object({
   })
 })
 
-router.post("/register", validate(authSchema), async (req, res, next) => {
+router.post("/register", authRateLimiter, validate(authSchema), async (req, res, next) => {
   try {
     const email = req.body.email.toLowerCase()
     const password = req.body.password
@@ -42,7 +43,11 @@ router.post("/register", validate(authSchema), async (req, res, next) => {
       [email, hash, ip, ip, pteroId]
     )
 
-    const user = await getOne("SELECT * FROM users WHERE id = ?", [info.lastID])
+    // Never SELECT * — keep password_hash out of memory
+    const user = await getOne(
+      "SELECT id, email, role, coins, balance FROM users WHERE id = ?",
+      [info.lastID]
+    )
     const token = signToken(user)
 
     res.status(201).json({ token, user: { id: user.id, email: user.email, role: user.role } })
@@ -51,7 +56,7 @@ router.post("/register", validate(authSchema), async (req, res, next) => {
   }
 })
 
-router.post("/login", validate(authSchema), async (req, res, next) => {
+router.post("/login", authRateLimiter, validate(authSchema), async (req, res, next) => {
   try {
     const email = req.body.email.toLowerCase()
     const password = req.body.password

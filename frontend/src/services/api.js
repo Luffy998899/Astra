@@ -309,10 +309,271 @@ export const api = {
     return res.json()
   },
 
+  // Coupons (admin)
+  getCoupons: async (token) => {
+    const res = await fetch(`${API_URL}/admin/coupons`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Failed to fetch coupons")
+    return res.json()
+  },
+
+  createCoupon: async (token, data) => {
+    const res = await fetch(`${API_URL}/admin/coupons`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data)
+    })
+    if (!res.ok) throw new Error((await res.json()).error || "Failed to create coupon")
+    return res.json()
+  },
+
+  updateCoupon: async (token, id, data) => {
+    const res = await fetch(`${API_URL}/admin/coupons/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data)
+    })
+    if (!res.ok) throw new Error((await res.json()).error || "Failed to update coupon")
+    return res.json()
+  },
+
+  deleteCoupon: async (token, id) => {
+    const res = await fetch(`${API_URL}/admin/coupons/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Failed to delete coupon")
+    return res.json()
+  },
+
   // Ads
   getCoinsPageAds: async () => {
     const res = await fetch(`${API_URL}/ads/coins`)
     if (!res.ok) throw new Error("Failed to fetch ads")
+    return res.json()
+  },
+
+  // Payment settings (UPI)
+  getPaymentSettings: async () => {
+    const res = await fetch(`${API_URL}/settings/payment`)
+    if (!res.ok) return { upiId: null, upiName: null }
+    return res.json()
+  },
+
+  // Tickets
+  createTicket: async (token, data, imageFile) => {
+    const formData = new FormData()
+    formData.append("category", data.category)
+    formData.append("subject", data.subject)
+    formData.append("message", data.message)
+    if (data.priority) formData.append("priority", data.priority)
+    if (imageFile) formData.append("image", imageFile)
+
+    const res = await fetch(`${API_URL}/tickets`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    })
+    if (!res.ok) throw new Error((await res.json()).error || "Failed to create ticket")
+    return res.json()
+  },
+
+  getMyTickets: async (token) => {
+    const res = await fetch(`${API_URL}/tickets/my`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Failed to fetch tickets")
+    return res.json()
+  },
+
+  getTicket: async (token, ticketId) => {
+    const res = await fetch(`${API_URL}/tickets/${ticketId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Failed to fetch ticket")
+    return res.json()
+  },
+
+  replyToTicket: async (token, ticketId, message, imageFile) => {
+    const formData = new FormData()
+    formData.append("message", message)
+    if (imageFile) formData.append("image", imageFile)
+
+    const res = await fetch(`${API_URL}/tickets/${ticketId}/reply`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    })
+    if (!res.ok) throw new Error((await res.json()).error || "Failed to send reply")
+    return res.json()
+  },
+
+  // Admin Tickets
+  getAllTickets: async (token, status) => {
+    const url = status ? `${API_URL}/admin/tickets?status=${status}` : `${API_URL}/admin/tickets`
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Failed to fetch tickets")
+    return res.json()
+  },
+
+  getAdminTicket: async (token, ticketId) => {
+    const res = await fetch(`${API_URL}/admin/tickets/${ticketId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Failed to fetch ticket")
+    return res.json()
+  },
+
+  adminReplyToTicket: async (token, ticketId, message, imageFile) => {
+    const formData = new FormData()
+    formData.append("message", message)
+    if (imageFile) formData.append("image", imageFile)
+
+    const res = await fetch(`${API_URL}/admin/tickets/${ticketId}/reply`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    })
+    if (!res.ok) throw new Error((await res.json()).error || "Failed to send reply")
+    return res.json()
+  },
+
+  updateTicketStatus: async (token, ticketId, status) => {
+    const res = await fetch(`${API_URL}/admin/tickets/${ticketId}/status`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ status })
+    })
+    if (!res.ok) throw new Error("Failed to update ticket status")
+    return res.json()
+  },
+
+  deleteTicket: async (token, ticketId) => {
+    const res = await fetch(`${API_URL}/admin/tickets/${ticketId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Failed to delete ticket")
+    return res.json()
+  },
+
+  // ─── Frontpage (public) ───────────────────────────────────────────────────
+
+  getFrontpage: async () => {
+    const res = await fetch(`${API_URL}/frontpage`)
+    if (!res.ok) throw new Error("Failed to fetch frontpage content")
+    return res.json()
+  },
+
+  getLandingPlans: async () => {
+    const res = await fetch(`${API_URL}/frontpage/landing-plans`)
+    if (!res.ok) throw new Error("Failed to fetch landing plans")
+    return res.json()
+  },
+
+  // ─── Admin: Frontpage editor ──────────────────────────────────────────────
+
+  getAdminFrontpage: async () => {
+    const token = localStorage.getItem("token")
+    const res = await fetch(`${API_URL}/admin/frontpage`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Failed to fetch frontpage content")
+    return res.json()
+  },
+
+  updateFrontpageSection: async (section, content) => {
+    const token = localStorage.getItem("token")
+    const res = await fetch(`${API_URL}/admin/frontpage/${section}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ content })
+    })
+    if (!res.ok) throw new Error((await res.json()).error || "Failed to update section")
+    return res.json()
+  },
+
+  // ─── Admin: Landing Plans ─────────────────────────────────────────────────
+
+  getAdminLandingPlans: async () => {
+    const token = localStorage.getItem("token")
+    const res = await fetch(`${API_URL}/admin/frontpage/landing-plans`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Failed to fetch landing plans")
+    return res.json()
+  },
+
+  createLandingPlan: async (planData) => {
+    const token = localStorage.getItem("token")
+    const res = await fetch(`${API_URL}/admin/frontpage/landing-plans`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(planData)
+    })
+    if (!res.ok) throw new Error((await res.json()).error || "Failed to create plan")
+    return res.json()
+  },
+
+  updateLandingPlan: async (id, planData) => {
+    const token = localStorage.getItem("token")
+    const res = await fetch(`${API_URL}/admin/frontpage/landing-plans/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(planData)
+    })
+    if (!res.ok) throw new Error((await res.json()).error || "Failed to update plan")
+    return res.json()
+  },
+
+  deleteLandingPlan: async (id) => {
+    const token = localStorage.getItem("token")
+    const res = await fetch(`${API_URL}/admin/frontpage/landing-plans/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error((await res.json()).error || "Failed to delete plan")
+    return res.json()
+  },
+
+  toggleLandingPlanActive: async (id) => {
+    const token = localStorage.getItem("token")
+    const res = await fetch(`${API_URL}/admin/frontpage/landing-plans/${id}/toggle-active`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Failed to toggle plan status")
+    return res.json()
+  },
+
+  toggleLandingPlanPopular: async (id) => {
+    const token = localStorage.getItem("token")
+    const res = await fetch(`${API_URL}/admin/frontpage/landing-plans/${id}/toggle-popular`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error("Failed to toggle popular status")
     return res.json()
   }
 }
