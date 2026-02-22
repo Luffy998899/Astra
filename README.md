@@ -275,6 +275,66 @@ npm run test-pterodactyl
 
 This will validate your Pterodactyl settings and show available allocations.
 
+## Production Deployment
+
+An interactive deployment script is included for Ubuntu 22.04 / 24.04 VPS servers.
+
+### Prerequisites
+- A fresh Ubuntu 22.04 or 24.04 VPS
+- A domain pointing to your server's IP (for SSL)
+- Root or sudo access
+
+### Steps
+
+**1. Clone the repo on your VPS:**
+```bash
+git clone https://github.com/Luffy998899/Astra.git
+cd Astra
+```
+
+**2. Run the deploy script:**
+```bash
+bash deploy.sh
+```
+
+The script will interactively ask for:
+- Your domain name (e.g. `panel.example.com`)
+- Pterodactyl panel URL and API key
+- JWT secret
+- Discord webhook URL
+- Adsterra API credentials
+- UPI ID and name (shown on the billing page)
+- Whether to enable SSL via Let's Encrypt (Certbot)
+
+It then automatically:
+- Installs Node.js, Nginx, PM2, and Certbot
+- Writes `backend/.env` from your answers
+- Runs all database migrations
+- Builds the React frontend
+- Configures Nginx with reverse proxy + WebSocket support
+- Starts the backend with PM2 (`astra-backend`)
+- Optionally obtains and configures an SSL certificate
+
+### After Deployment
+
+| Task | Command |
+|------|---------|
+| View logs | `pm2 logs astra-backend` |
+| Restart backend | `pm2 restart astra-backend` |
+| Check status | `pm2 status` |
+| Update deployment | `git pull && bash deploy.sh` |
+
+### Create Admin User (after deploy)
+```bash
+cd /path/to/Astra/backend
+npm run create-admin
+```
+
+### Environment File
+Your production environment variables live at `backend/.env`. Reference `backend/.env.production.example` for all available options with descriptions.
+
+---
+
 ## Key Features
 - Coin plans and real money plans with weekly/monthly/custom durations
 - Automated renewal, 12h grace period, suspend and delete flow
