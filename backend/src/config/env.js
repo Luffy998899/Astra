@@ -1,0 +1,54 @@
+import dotenv from "dotenv"
+import { z } from "zod"
+
+dotenv.config()
+
+const envSchema = z.object({
+  NODE_ENV: z.string().default("development"),
+  PORT: z.string().default("4000"),
+  FRONTEND_URL: z.string().default("http://localhost:5173"),
+  JWT_SECRET: z.string().min(10),
+  JWT_EXPIRES_IN: z.string().default("7d"),
+  DB_PATH: z.string().default("./data/astranodes.sqlite"),
+  UPLOAD_DIR: z.string().default("./uploads"),
+  RATE_LIMIT_WINDOW: z.string().default("900000"),
+  RATE_LIMIT_MAX: z.string().default("200"),
+  PTERODACTYL_URL: z.string().min(1),
+  PTERODACTYL_API_KEY: z.string().min(1),
+  PTERODACTYL_DEFAULT_NODE: z.string().min(1),
+  PTERODACTYL_DEFAULT_EGG: z.string().min(1),
+  PTERODACTYL_DEFAULT_ALLOCATION: z.string().optional(),
+  PTERODACTYL_DEFAULT_DOCKER_IMAGE: z.string().min(1),
+  PTERODACTYL_DEFAULT_STARTUP: z.string().min(1),
+  PTERODACTYL_DEFAULT_ENV: z.string().default("{}"),
+  DISCORD_WEBHOOK_URL: z.string().min(1),
+  ADSTERRA_API_TOKEN: z.string().min(1),
+  ADSTERRA_DOMAIN_ID: z.string().min(1),
+  ADSTERRA_NATIVE_BANNER_ID: z.string().optional(),
+  ADSTERRA_BANNER_ID: z.string().optional(),
+  ADSTERRA_NATIVE_BANNER_KEY: z.string().optional(),
+  ADSTERRA_BANNER_KEY: z.string().optional(),
+  ADSTERRA_NATIVE_BANNER_SCRIPT: z.string().optional(),
+  ADSTERRA_BANNER_SCRIPT: z.string().optional(),
+  ADSTERRA_NATIVE_CONTAINER_ID: z.string().optional()
+})
+
+const parsed = envSchema.safeParse(process.env)
+
+if (!parsed.success) {
+  console.error("Invalid environment configuration", parsed.error.flatten().fieldErrors)
+  process.exit(1)
+}
+
+export const env = {
+  ...parsed.data,
+  PORT: Number(parsed.data.PORT),
+  RATE_LIMIT_WINDOW: Number(parsed.data.RATE_LIMIT_WINDOW),
+  RATE_LIMIT_MAX: Number(parsed.data.RATE_LIMIT_MAX),
+  PTERODACTYL_DEFAULT_NODE: Number(parsed.data.PTERODACTYL_DEFAULT_NODE),
+  PTERODACTYL_DEFAULT_EGG: Number(parsed.data.PTERODACTYL_DEFAULT_EGG),
+  PTERODACTYL_DEFAULT_ALLOCATION: parsed.data.PTERODACTYL_DEFAULT_ALLOCATION ? Number(parsed.data.PTERODACTYL_DEFAULT_ALLOCATION) : null,
+  ADSTERRA_DOMAIN_ID: Number(parsed.data.ADSTERRA_DOMAIN_ID),
+  ADSTERRA_NATIVE_BANNER_ID: parsed.data.ADSTERRA_NATIVE_BANNER_ID ? Number(parsed.data.ADSTERRA_NATIVE_BANNER_ID) : null,
+  ADSTERRA_BANNER_ID: parsed.data.ADSTERRA_BANNER_ID ? Number(parsed.data.ADSTERRA_BANNER_ID) : null
+}

@@ -1,0 +1,356 @@
+import { Router } from "express"
+import { z } from "zod"
+import { validate } from "../middlewares/validate.js"
+import { requireAuth, requireAdmin } from "../middlewares/auth.js"
+import { query, getOne, runSync } from "../config/db.js"
+import { pterodactyl } from "../services/pterodactyl.js"
+import { approveSubmission, rejectSubmission, deleteScreenshot } from "../services/utrService.js"
+
+const router = Router()
+
+router.use(requireAuth, requireAdmin)
+
+const coinPlanSchema = z.object({
+  body: z.object({
+    name: z.string().min(2),
+    icon: z.string().optional().default("Package"),
+    ram: z.number().int().positive(),
+    cpu: z.number().int().positive(),
+    storage: z.number().int().positive(),
+    coin_price: z.number().int().positive(),
+    duration_type: z.enum(["weekly", "monthly", "custom", "days", "lifetime"]),
+    duration_days: z.number().int().positive(),
+    limited_stock: z.boolean().default(false),
+    stock_amount: z.number().int().positive().nullable().optional(),
+    one_time_purchase: z.boolean().default(false)
+  })
+})
+
+const realPlanSchema = z.object({
+  body: z.object({
+    name: z.string().min(2),
+    icon: z.string().optional().default("Server"),
+    ram: z.number().int().positive(),
+    cpu: z.number().int().positive(),
+    storage: z.number().int().positive(),
+    price: z.number().positive(),
+    duration_type: z.enum(["weekly", "monthly", "custom", "days", "lifetime"]),
+    duration_days: z.number().int().positive(),
+    limited_stock: z.boolean().default(false),
+    stock_amount: z.number().int().positive().nullable().optional()
+  })
+})
+
+const couponSchema = z.object({
+  body: z.object({
+    code: z.string().min(3),
+    coin_reward: z.number().int().positive(),
+    max_uses: z.number().int().positive(),
+    per_user_limit: z.number().int().positive(),
+    expires_at: z.string().min(5),
+    active: z.boolean().default(true)
+  })
+})
+
+const coinSettingSchema = z.object({
+  body: z.object({
+    coins_per_minute: z.number().int().positive()
+  })
+})
+
+const flagSchema = z.object({
+  body: z.object({
+    flagged: z.boolean()
+  })
+})
+
+router.get("/users", async (req, res, next) => {
+  try {
+    const users = await query(
+      "SELECT id, email, role, coins, balance, ip_address, last_login_ip, flagged, created_at FROM users ORDER BY created_at DESC"
+    )
+    res.json(users)
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.patch("/users/:id/flag", validate(flagSchema), async (req, res, next) => {
+  try {
+    await runSync(
+      "UPDATE users SET flagged = ? WHERE id = ?",
+      [req.body.flagged ? 1 : 0, req.params.id]
+    )
+    res.json({ status: "ok" })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.post("/plans/coin", validate(coinPlanSchema), async (req, res, next) => {
+  try {
+    const info = await runSync(
+      "INSERT INTO plans_coin (name, icon, ram, cpu, storage, coin_price, duration_type, duration_days, limited_stock, stock_amount, one_time_purchase) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        req.body.name,
+        req.body.icon || "Package",
+        req.body.ram,
+        req.body.cpu,
+        req.body.storage,
+        req.body.coin_price,
+        req.body.duration_type,
+        req.body.duration_days,
+        req.body.limited_stock ? 1 : 0,
+        req.body.stock_amount || null,
+        req.body.one_time_purchase ? 1 : 0
+      ]
+    )
+    console.log("[ADMIN] Coin plan created with ID:", info.lastID)
+    res.status(201).json({ id: info.lastID })
+  } catch (error) {
+    console.error("[ADMIN] Error creating coin plan:", error.message)
+    next(error)
+  }
+})
+
+router.post("/plans/real", validate(realPlanSchema), async (req, res, next) => {
+  try {
+    const info = await runSync(
+      "INSERT INTO plans_real (name, icon, ram, cpu, storage, price, duration_type, duration_days, limited_stock, stock_amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        req.body.name,
+        req.body.icon || "Server",
+        req.body.ram,
+        req.body.cpu,
+        req.body.storage,
+        req.body.price,
+        req.body.duration_type,
+        req.body.duration_days,
+        req.body.limited_stock ? 1 : 0,
+        req.body.stock_amount || null
+      ]
+    )
+    res.status(201).json({ id: info.lastID })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.put("/plans/coin/:id", validate(coinPlanSchema), async (req, res, next) => {
+  try {
+    await runSync(
+      "UPDATE plans_coin SET name = ?, icon = ?, ram = ?, cpu = ?, storage = ?, coin_price = ?, duration_type = ?, duration_days = ?, limited_stock = ?, stock_amount = ?, one_time_purchase = ? WHERE id = ?",
+      [
+        req.body.name,
+        req.body.icon || "Package",
+        req.body.ram,
+        req.body.cpu,
+        req.body.storage,
+        req.body.coin_price,
+        req.body.duration_type,
+        req.body.duration_days || null,
+        req.body.limited_stock ? 1 : 0,
+        req.body.stock_amount || null,
+        req.body.one_time_purchase ? 1 : 0,
+        req.params.id
+      ]
+    )
+    res.json({ status: "ok" })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.put("/plans/real/:id", validate(realPlanSchema), async (req, res, next) => {
+  try {
+    await runSync(
+      "UPDATE plans_real SET name = ?, icon = ?, ram = ?, cpu = ?, storage = ?, price = ?, duration_type = ?, duration_days = ?, limited_stock = ?, stock_amount = ? WHERE id = ?",
+      [
+        req.body.name,
+        req.body.icon || "Server",
+        req.body.ram,
+        req.body.cpu,
+        req.body.storage,
+        req.body.price,
+        req.body.duration_type,
+        req.body.duration_days || null,
+        req.body.limited_stock ? 1 : 0,
+        req.body.stock_amount || null,
+        req.params.id
+      ]
+    )
+    res.json({ status: "ok" })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.delete("/plans/coin/:id", async (req, res, next) => {
+  try {
+    await runSync("DELETE FROM plans_coin WHERE id = ?", [req.params.id])
+    res.json({ status: "ok" })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.delete("/plans/real/:id", async (req, res, next) => {
+  try {
+    await runSync("DELETE FROM plans_real WHERE id = ?", [req.params.id])
+    res.json({ status: "ok" })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.post("/coupons", validate(couponSchema), async (req, res, next) => {
+  try {
+    const info = await runSync(
+      "INSERT INTO coupons (code, coin_reward, max_uses, per_user_limit, expires_at, active) VALUES (?, ?, ?, ?, ?, ?)",
+      [
+        req.body.code.toUpperCase(),
+        req.body.coin_reward,
+        req.body.max_uses,
+        req.body.per_user_limit,
+        req.body.expires_at,
+        req.body.active ? 1 : 0
+      ]
+    )
+    res.status(201).json({ id: info.lastID })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.put("/coupons/:id", validate(couponSchema), async (req, res, next) => {
+  try {
+    await runSync(
+      "UPDATE coupons SET code = ?, coin_reward = ?, max_uses = ?, per_user_limit = ?, expires_at = ?, active = ? WHERE id = ?",
+      [
+        req.body.code.toUpperCase(),
+        req.body.coin_reward,
+        req.body.max_uses,
+        req.body.per_user_limit,
+        req.body.expires_at,
+        req.body.active ? 1 : 0,
+        req.params.id
+      ]
+    )
+    res.json({ status: "ok" })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.get("/servers", async (req, res, next) => {
+  try {
+    const servers = await query(
+      "SELECT s.*, u.email FROM servers s JOIN users u ON u.id = s.user_id ORDER BY s.created_at DESC"
+    )
+    res.json(servers)
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.get("/servers/expiring", async (req, res, next) => {
+  try {
+    const soon = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    const servers = await query(
+      "SELECT * FROM servers WHERE status = 'active' AND expires_at <= ?",
+      [soon]
+    )
+    res.json(servers)
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.get("/servers/suspended", async (req, res, next) => {
+  try {
+    const servers = await query("SELECT * FROM servers WHERE status = 'suspended'")
+    res.json(servers)
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.post("/servers/:id/suspend", async (req, res, next) => {
+  try {
+    const server = await getOne("SELECT * FROM servers WHERE id = ?", [req.params.id])
+    if (!server) {
+      return res.status(404).json({ error: "Server not found" })
+    }
+
+    await pterodactyl.suspendServer(server.pterodactyl_server_id)
+    await runSync(
+      "UPDATE servers SET status = 'suspended', suspended_at = ? WHERE id = ?",
+      [new Date().toISOString(), server.id]
+    )
+
+    res.json({ status: "suspended" })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.delete("/servers/:id", async (req, res, next) => {
+  try {
+    const server = await getOne("SELECT * FROM servers WHERE id = ?", [req.params.id])
+    if (!server) {
+      return res.status(404).json({ error: "Server not found" })
+    }
+
+    await pterodactyl.deleteServer(server.pterodactyl_server_id)
+    await runSync("UPDATE servers SET status = 'deleted' WHERE id = ?", [server.id])
+
+    res.json({ status: "deleted" })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.patch("/coin-settings", validate(coinSettingSchema), async (req, res, next) => {
+  try {
+    await runSync(
+      "UPDATE coin_settings SET coins_per_minute = ? WHERE id = 1",
+      [req.body.coins_per_minute]
+    )
+    res.json({ status: "ok" })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.get("/utr", async (req, res, next) => {
+  try {
+    const submissions = await query(
+      "SELECT u.email, ut.* FROM utr_submissions ut JOIN users u ON u.id = ut.user_id ORDER BY ut.created_at DESC"
+    )
+    res.json(submissions)
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.patch("/utr/:id/approve", async (req, res, next) => {
+  try {
+    const submission = await approveSubmission(req.params.id)
+    await deleteScreenshot(submission.screenshot_path)
+    res.json({ status: "approved" })
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.patch("/utr/:id/reject", async (req, res, next) => {
+  try {
+    const submission = await rejectSubmission(req.params.id)
+    await deleteScreenshot(submission.screenshot_path)
+    res.json({ status: "rejected" })
+  } catch (error) {
+    next(error)
+  }
+})
+
+export default router

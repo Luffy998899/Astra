@@ -1,1 +1,251 @@
-# Astra
+# AstraNodes
+
+Full-stack Minecraft hosting platform with a premium dashboard UI, secure backend, automated renewals, and Pterodactyl lifecycle integration.
+
+## Stack
+- Frontend: React (Vite) + TailwindCSS v4
+- Backend: Node.js (Express) + SQLite
+- Auth: JWT + bcrypt
+- Automation: cron-based expiry checks every 5 minutes
+
+## Project Structure
+- frontend/ - UI and client routing
+- backend/ - API, database, cron, and Pterodactyl integration
+
+## Frontend Setup
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Backend Setup
+```bash
+cd backend
+cp .env.example .env
+npm install
+npm run migrate
+npm run dev
+```
+
+## Create Admin User
+```bash
+cd backend
+npm run create-admin
+# Follow prompts to create admin account
+# Login with admin credentials to access /admin panel
+```
+
+## Database Migrations
+
+### Add Icon Support to Plans (Run once for existing databases)
+```bash
+cd backend
+npm run migrate-icons
+```
+
+This adds the `icon` column to both `plans_coin` and `plans_real` tables. Required if you're upgrading from a version without icon support.
+
+### Update Duration Types (Run once for existing databases)
+```bash
+cd backend
+npm run migrate-duration
+```
+
+This updates the database constraints to support new duration types ("days" and "lifetime") and makes `duration_days` required. Run this if you see validation errors when creating plans.
+
+## Plan Management
+
+Admins can create, edit, and delete plans from the admin panel with the following features:
+
+### Available Icons
+Choose from 15 lucide-react icons for your plans:
+- Package, Server, Cpu, HardDrive, Zap ⚡
+- Sparkles ✨, Star ⭐, Crown 👑, Shield 🛡️
+- Rocket 🚀, Gift 🎁, Gem 💎, Trophy 🏆, Diamond 💠, Circle ⭕
+
+### Plan Fields
+- **Name**: Display name for the plan
+- **Icon**: Custom icon from the available set
+- **Resources**: RAM (GB), CPU (cores), Storage (GB)
+- **Pricing**: Coin price or real money price (₹)
+- **Duration**: Type (days/lifetime) and number of days
+- **Stock**: Optional limited stock with quantity
+- **One-time Purchase**: (Coin plans only) Allow purchase only once per user
+
+### One-Time Purchase Plans
+When enabled on a coin plan, users can only purchase that specific plan once. However, they can still:
+- **Renew** their existing server with that plan (extend the expiration)
+- Purchase other plans normally
+- Purchase the same plan again if their previous server was deleted
+
+This is useful for limited-edition or special promotional plans where you want to restrict users to one active server per plan.
+
+### Automatic Frontend Updates
+When admins create, edit, or delete plans, changes are immediately reflected on the Plans page for all users. No caching or manual refresh required - the Plans page fetches live data from the database on every load.
+
+## AFK Coins with Ads Monetization
+
+The Coins page (/coins) is monetized with Adsterra ads via their Publisher API. The system supports **both iframe-based and script-based ad placements**.
+
+**How it works:**
+- Backend fetches your ad placements from Adsterra API
+- Displays ads on the Coins page via iframe (for direct_url placements) or custom script (for other formats)
+- Users **MUST view ads before they can claim coins** - this is monetization requirement
+- If no valid ads are configured, coin claiming is **DISABLED**
+- AdBlock detection also prevents earning if blocker is enabled
+
+**Setup:**
+1. Create account at https://adsterra.com
+2. Create ad placements (native banner, standard banner, or any other format)
+3. Get your domain ID and placement IDs from Adsterra dashboard
+4. Add to `.env`:
+   ```
+   ADSTERRA_API_TOKEN=your_token
+   ADSTERRA_DOMAIN_ID=your_domain_id
+   ADSTERRA_NATIVE_BANNER_ID=placement_id_1
+   ADSTERRA_BANNER_ID=placement_id_2
+   ```
+5. Test with: `curl http://localhost:4000/api/ads/test`
+6. Look for your placements and check the types
+7. Restart backend
+8. Ads appear automatically on the Coins page
+
+**Ad Format Types:**
+
+- **iframe** - Direct URL embedding (fastest, no script injection)
+  - Shows as `"type": "iframe"` in test output
+  - Loads directly in an iframe
+
+- **script** - Script-based ads (popunders, social bars, native ads, etc.)
+  - Shows as `"type": "script"` in test output  
+  - Requires `key` field from Adsterra API
+  - Frontend sets up `atOptions` and injects the script
+  - Example: `https://www.highperformanceformat.com/{key}/invoke.js`
+
+**Revenue:**
+- Earn per impression and per click
+- Multiple placement types for varied user experience
+- AdBlock detection protects ad revenue by preventing earnings when ads are blocked
+
+
+
+
+## Backend Environment Variables
+Set these in backend/.env:
+
+### Required Configuration
+- **JWT_SECRET** - Secret key for JWT tokens (minimum 10 characters)
+- **JWT_EXPIRES_IN** - Token expiration time (default: 7d)
+- **DB_PATH** - Path to SQLite database file
+- **DISCORD_WEBHOOK_URL** - Discord webhook for UTR notifications
+
+### Monetization
+- **ADSTERRA_API_TOKEN** - Your Adsterra API token for displaying ads on the Coins/AFK page. Get this by logging into Adsterra and generating a new token.
+- **ADSTERRA_DOMAIN_ID** - Your domain ID from Adsterra (required)
+- **ADSTERRA_NATIVE_BANNER_ID** - *(Optional)* Placement ID for native banner ads with direct_url. Leave empty to auto-detect.
+- **ADSTERRA_BANNER_ID** - *(Optional)* Placement ID for standard banner ads with direct_url. Leave empty to auto-detect.
+- **ADSTERRA_NATIVE_BANNER_KEY** - *(Optional)* Placement key for script-based native banner ads (used when API does not return key).
+- **ADSTERRA_BANNER_KEY** - *(Optional)* Placement key for script-based banner ads (used when API does not return key).
+- **ADSTERRA_NATIVE_BANNER_SCRIPT** - *(Optional)* Script URL for native banner ads (effectivegatecpm domain).
+- **ADSTERRA_BANNER_SCRIPT** - *(Optional)* Script URL for banner ads (highperformanceformat domain).
+- **ADSTERRA_NATIVE_CONTAINER_ID** - *(Optional)* Container ID for script-based native banner ads.
+
+**Adsterra Setup:**
+The system fetches your ad placements directly from Adsterra API and displays them on the Coins/AFK page. It supports both **iframe-based** (direct_url) and **script-based** placements.
+
+1. Login to Adsterra dashboard
+2. Go to Placements section
+3. Note the ID for each placement you want to use
+4. Add to `.env`: `ADSTERRA_NATIVE_BANNER_ID=xxx` and `ADSTERRA_BANNER_ID=yyy`
+5. Restart backend and test
+
+**Script-based placements:**
+If Adsterra does not return `key`/`script` in the API response, add them manually:
+- `ADSTERRA_BANNER_KEY` and `ADSTERRA_BANNER_SCRIPT` for banner ads
+- `ADSTERRA_NATIVE_BANNER_SCRIPT` and `ADSTERRA_NATIVE_CONTAINER_ID` for native ads
+
+**Test Adsterra Configuration:**
+```bash
+cd backend
+curl http://localhost:4000/api/ads/test
+```
+
+Expected output format:
+```json
+{
+  "success": true,
+  "totalPlacements": 2,
+  "placements": [
+    {
+      "id": 28669969,
+      "title": "468x60_1",
+      "key": "abc123def456...",
+      "format": "iframe",
+      "width": 468,
+      "height": 60,
+      "type": "script",
+      "allFields": ["id", "title", "key", "format", "width", "height", ...]
+    }
+  ]
+}
+```
+
+Check the output for:
+- `"type": "iframe"` = Direct URL embedding (loads directly)
+- `"type": "script"` = Script-based (needs key field)
+- `"key": "..."` = Required for script injection
+- `"format"`: "iframe" or other format type
+
+Both types are supported and will allow users to earn coins.
+
+
+
+
+### Pterodactyl Integration
+Pterodactyl settings for server provisioning:
+
+- **PTERODACTYL_URL** - Full URL to your Pterodactyl panel (e.g., https://panel.example.com)
+- **PTERODACTYL_API_KEY** - Admin API key from Pterodactyl panel
+- **PTERODACTYL_DEFAULT_NODE** - Node ID where servers will be created (must be a number)
+- **PTERODACTYL_DEFAULT_EGG** - Egg ID for Minecraft servers (must be a number)
+- **PTERODACTYL_DEFAULT_ALLOCATION** - *(Optional)* Specific allocation ID for server ports. If not set, the system will automatically find and use available allocations from the node.
+- **PTERODACTYL_DEFAULT_DOCKER_IMAGE** - Docker image (e.g., ghcr.io/pterodactyl/yolks:java_17)
+- **PTERODACTYL_DEFAULT_STARTUP** - Startup command (e.g., java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar server.jar)
+- **PTERODACTYL_DEFAULT_ENV** - Environment variables as JSON. For Paper egg, use: `{"MINECRAFT_VERSION":"1.20.1","SERVER_JARFILE":"server.jar","BUILD_NUMBER":"latest"}`
+
+**Dynamic Allocation (Recommended):**
+Leave `PTERODACTYL_DEFAULT_ALLOCATION` empty to enable automatic allocation selection. The system will:
+- Automatically find available (unassigned) allocations on the node
+- Use a different allocation for each server
+- Prevent "allocation already in use" errors
+- Require no manual allocation management
+
+**Static Allocation:**
+Set `PTERODACTYL_DEFAULT_ALLOCATION` to a specific ID if you want all servers to attempt using the same allocation (not recommended for multiple servers).
+
+**To find allocation IDs, node IDs, and egg IDs:**
+1. Login to your Pterodactyl panel as admin
+2. Navigate to Admin → Nodes → Select your node → Allocations
+3. Note the allocation ID you want to use (or leave empty for dynamic)
+4. Navigate to Admin → Nests → Eggs to find egg IDs
+
+**Test your configuration:**
+```bash
+cd backend
+npm run test-pterodactyl
+```
+
+This will validate your Pterodactyl settings and show available allocations.
+
+## Key Features
+- Coin plans and real money plans with weekly/monthly/custom durations
+- Automated renewal, 12h grace period, suspend and delete flow
+- AFK coin system with adblock enforcement
+- Coupon anti-abuse rules with IP flagging
+- UTR billing with secure uploads and Discord delivery
+- Admin panel controls for plans, coupons, users, and servers
+
+## Notes
+- Uploads are stored in backend/UPLOAD_DIR and deleted after UTR review.
+- Tailwind v4 uses PostCSS plugin @tailwindcss/postcss.
