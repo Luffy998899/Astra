@@ -62,6 +62,7 @@ export default function Landing() {
   const [loadingPlans, setLoadingPlans] = useState(true)
   const [liveStats, setLiveStats] = useState(null)
   const socketRef = useRef(null)
+  const isLoggedIn = Boolean(localStorage.getItem("token"))
 
   useEffect(() => {
     // Load initial data in parallel
@@ -79,9 +80,17 @@ export default function Landing() {
       .then(setLiveStats)
       .catch(() => {})
 
-    // Real-time socket updates
-    const socket = io(getSocketUrl(), { transports: ["websocket", "polling"] })
+    // Real-time socket updates (polling first avoids WS race on strict-mode remount)
+    const socket = io(getSocketUrl(), {
+      transports: ["polling", "websocket"],
+      reconnectionAttempts: 3,
+      timeout: 5000
+    })
     socketRef.current = socket
+
+    socket.on("connect_error", () => {
+      // Live updates unavailable — static content already loaded, no action needed
+    })
 
     socket.on("frontpage:update", ({ section, data }) => {
       setContent((prev) => ({
@@ -127,13 +136,24 @@ export default function Landing() {
           <header className="flex flex-wrap items-center justify-between gap-4">
             <Logo size="lg" />
             <div className="flex items-center gap-4 text-sm">
-              <Link to="/login" className="text-slate-300 hover:text-slate-100">Login</Link>
-              <Link
-                to={hero.primaryButtonLink || "/register"}
-                className="button-3d rounded-xl bg-neon-500/20 px-4 py-2 font-semibold text-neon-200"
-              >
-                Get Started
-              </Link>
+              {isLoggedIn ? (
+                <Link
+                  to="/dashboard"
+                  className="button-3d rounded-xl bg-neon-500/20 px-4 py-2 font-semibold text-neon-200"
+                >
+                  My Dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link to="/login" className="text-slate-300 hover:text-slate-100">Login</Link>
+                  <Link
+                    to={hero.primaryButtonLink || "/register"}
+                    className="button-3d rounded-xl bg-neon-500/20 px-4 py-2 font-semibold text-neon-200"
+                  >
+                    Get Started
+                  </Link>
+                </>
+              )}
             </div>
           </header>
 
@@ -159,10 +179,10 @@ export default function Landing() {
 
               <div className="flex flex-wrap gap-4">
                 <Link
-                  to={hero.primaryButtonLink || "/register"}
+                  to={isLoggedIn ? "/dashboard" : (hero.primaryButtonLink || "/register")}
                   className="button-3d inline-flex items-center gap-2 rounded-xl bg-neon-500/20 px-5 py-3 text-sm font-semibold text-neon-200"
                 >
-                  {hero.primaryButtonText || "Launch Dashboard"} <ArrowRight className="h-4 w-4" />
+                  {isLoggedIn ? "Go to Dashboard" : (hero.primaryButtonText || "Launch Dashboard")} <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
                   to={hero.secondaryButtonLink || "/plans"}
@@ -291,14 +311,14 @@ export default function Landing() {
                           </ul>
                         )}
                         <Link
-                          to="/register"
+                          to={isLoggedIn ? "/plans" : "/register"}
                           className={`button-3d mt-2 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition ${
                             plan.popular
                               ? "bg-neon-500/25 border border-neon-500/30 text-neon-200"
                               : "border border-slate-700/60 text-slate-200 hover:border-slate-600"
                           }`}
                         >
-                          Get Started <ArrowRight className="h-4 w-4" />
+                          {isLoggedIn ? "View Plan" : "Get Started"} <ArrowRight className="h-4 w-4" />
                         </Link>
                       </div>
                     </div>
@@ -316,10 +336,10 @@ export default function Landing() {
                 <p className="mt-2 text-slate-400">{about.description}</p>
               </div>
               <Link
-                to="/register"
+                to={isLoggedIn ? "/dashboard" : "/register"}
                 className="button-3d inline-flex items-center gap-2 rounded-xl bg-neon-500/20 px-6 py-3 text-sm font-semibold text-neon-200"
               >
-                Build my stack <ArrowRight className="h-4 w-4" />
+                {isLoggedIn ? "Go to Dashboard" : "Build my stack"} <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
           </section>

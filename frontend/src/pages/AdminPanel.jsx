@@ -58,6 +58,7 @@ export default function AdminPanel() {
   const [approving, setApproving] = useState({})
   const [suspending, setSuspending] = useState({})
   const [deleting, setDeleting] = useState({})
+  const [deletingUser, setDeletingUser] = useState({})
   const [planModal, setPlanModal] = useState({ open: false, type: null, mode: 'create', data: null })
   const [planForm, setPlanForm] = useState({})
   const [savingPlan, setSavingPlan] = useState(false)
@@ -102,13 +103,13 @@ export default function AdminPanel() {
     loadAdminData()
   }, [navigate])
 
-  const handleFlagUser = async (userId) => {
+  const handleFlagUser = async (userId, currentlyFlagged) => {
     setFlagging((prev) => ({ ...prev, [userId]: true }))
     setError("")
 
     try {
       const token = localStorage.getItem("token")
-      await api.flagUser(token, userId)
+      await api.flagUser(token, userId, !currentlyFlagged)
 
       // Refresh users
       const data = await api.getUsers(token)
@@ -117,6 +118,23 @@ export default function AdminPanel() {
       setError(err.message)
     } finally {
       setFlagging((prev) => ({ ...prev, [userId]: false }))
+    }
+  }
+
+  const handleDeleteUser = async (userId, userEmail) => {
+    if (!window.confirm(`Permanently delete user "${userEmail}"? This will remove all their servers, tickets, and data. This cannot be undone.`)) return
+    setDeletingUser((prev) => ({ ...prev, [userId]: true }))
+    setError("")
+
+    try {
+      const token = localStorage.getItem("token")
+      await api.deleteUser(token, userId)
+
+      setUsers((prev) => prev.filter((u) => u.id !== userId))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeletingUser((prev) => ({ ...prev, [userId]: false }))
     }
   }
 
@@ -436,20 +454,34 @@ export default function AdminPanel() {
             {users.map((user) => (
               <div
                 key={user.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800/60 bg-ink-950/60 px-4 py-3"
+                className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-800/60 bg-ink-950/60 px-4 py-3"
               >
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 space-y-0.5">
                   <p className="font-semibold text-slate-100 truncate">{user.email}</p>
-                  <p className="text-xs text-slate-500">ID: {user.id}</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                    <span>ID: {user.id}</span>
+                    <span className="capitalize">{user.role}</span>
+                    <span>{user.coins ?? 0} coins</span>
+                    {user.balance > 0 && <span>₹{user.balance}</span>}
+                    {user.ip_address && <span>IP: {user.ip_address}</span>}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {user.flagged && <Badge label="Flagged" tone="suspended" />}
+                  {user.role === "admin" && <Badge label="Admin" tone="approved" />}
                   <button
-                    onClick={() => handleFlagUser(user.id)}
+                    onClick={() => handleFlagUser(user.id, user.flagged)}
                     disabled={flagging[user.id]}
-                    className="text-xs px-2 py-1 rounded bg-red-900/20 text-red-300 hover:bg-red-900/40 disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="text-xs px-2 py-1 rounded bg-yellow-900/20 text-yellow-300 hover:bg-yellow-900/40 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {user.flagged ? "Unflag" : "Flag"}
+                    {flagging[user.id] ? "..." : user.flagged ? "Unflag" : "Flag"}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteUser(user.id, user.email)}
+                    disabled={deletingUser[user.id]}
+                    className="text-xs px-2 py-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/40 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {deletingUser[user.id] ? "Deleting..." : "Remove"}
                   </button>
                 </div>
               </div>

@@ -110,3 +110,11 @@ button:active,
 select.input {
   cursor: pointer;
 }
+
+/* Hide scrollbar (used in mobile nav) */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

@@ -87,6 +87,25 @@ router.patch("/users/:id/flag", validate(flagSchema), async (req, res, next) => 
   }
 })
 
+router.delete("/users/:id", async (req, res, next) => {
+  try {
+    const userId = Number(req.params.id)
+    if (userId === req.user.id) {
+      return res.status(400).json({ message: "Cannot delete your own account" })
+    }
+    // Delete related data before removing the user
+    await runSync("DELETE FROM ticket_messages WHERE sender_id = ?", [userId])
+    await runSync("DELETE FROM tickets WHERE user_id = ?", [userId])
+    await runSync("DELETE FROM coupon_redemptions WHERE user_id = ?", [userId])
+    await runSync("DELETE FROM utr_submissions WHERE user_id = ?", [userId])
+    await runSync("DELETE FROM servers WHERE user_id = ?", [userId])
+    await runSync("DELETE FROM users WHERE id = ?", [userId])
+    res.json({ status: "ok" })
+  } catch (error) {
+    next(error)
+  }
+})
+
 router.post("/plans/coin", validate(coinPlanSchema), async (req, res, next) => {
   try {
     const info = await runSync(

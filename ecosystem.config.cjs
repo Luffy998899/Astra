@@ -1,15 +1,15 @@
 // PM2 Ecosystem Config — AstraNodes
 // SQLite requires single writer: exec_mode must be "fork" (not "cluster")
-// Generated/used by deploy.sh — edit environment values as needed.
+// This file is used by deploy.sh which updates the cwd path at deploy time.
+// For local dev, run: npm run dev (from backend/)
 
 module.exports = {
   apps: [
     {
       name: "astranodes-api",
-      script: "./backend/src/server.js",
-      cwd: "/opt/astranodes",           // Updated by deploy.sh
+      script: "./src/server.js",
+      cwd: "/opt/astranodes/backend",   // Updated by deploy.sh to match APP_DIR
       interpreter: "node",
-      interpreter_args: "--experimental-vm-modules",
       exec_mode: "fork",                // SQLite: single process only
       instances: 1,
       autorestart: true,

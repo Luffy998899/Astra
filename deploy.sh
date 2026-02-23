@@ -219,9 +219,18 @@ else
   else
     info "Copying files to ${APP_DIR}..."
     mkdir -p "$APP_DIR"
-    rsync -a --exclude='.git' --exclude='node_modules' \
-      --exclude='backend/data' --exclude='backend/uploads' \
+    rsync -a \
+      --exclude='.git' \
+      --exclude='node_modules' \
+      --exclude='backend/data' \
+      --exclude='backend/uploads' \
       --exclude='backend/.env' \
+      --exclude='frontend/.env' \
+      --exclude='frontend/.env.*' \
+      --exclude='frontend/dist' \
+      --exclude='*.db' \
+      --exclude='*.sqlite' \
+      --exclude='*.sqlite3' \
       "${REPO_DIR}/" "${APP_DIR}/"
   fi
 fi

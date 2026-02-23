@@ -197,6 +197,18 @@ export const api = {
     return res.json()
   },
 
+  deleteUser: async (token, userId) => {
+    const res = await fetch(`${API_URL}/admin/users/${userId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.message || "Failed to delete user")
+    }
+    return res.json()
+  },
+
   getServers: async (token) => {
     const res = await fetch(`${API_URL}/admin/servers`, {
       headers: { Authorization: `Bearer ${token}` }

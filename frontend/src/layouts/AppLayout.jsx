@@ -1,13 +1,16 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom"
-import { LogOut } from "lucide-react"
+import { LogOut, LayoutDashboard, Package, Coins, Server, CreditCard, Ticket, LifeBuoy, Shield } from "lucide-react"
 import Sidebar from "../components/Sidebar.jsx"
 import Logo from "../components/Logo.jsx"
 
 const mobileNav = [
-  { to: "/dashboard", label: "Dashboard" },
-  { to: "/plans", label: "Plans" },
-  { to: "/coins", label: "Coins" },
-  { to: "/servers", label: "Servers" }
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/plans", label: "Plans", icon: Package },
+  { to: "/coins", label: "Coins", icon: Coins },
+  { to: "/servers", label: "Servers", icon: Server },
+  { to: "/billing", label: "Billing", icon: CreditCard },
+  { to: "/coupons", label: "Redeem", icon: Ticket },
+  { to: "/support", label: "Support", icon: LifeBuoy }
 ]
 
 export default function AppLayout() {
@@ -26,15 +29,16 @@ export default function AppLayout() {
       <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[auto_1fr]">
         <Sidebar />
         <main className="px-6 py-6 lg:px-10">
-          <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-800/60 bg-ink-900/60 px-4 py-4 lg:hidden">
+          <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-slate-800/60 bg-ink-900/60 px-4 py-4 lg:hidden">
             <div className="flex items-center justify-between">
               <Logo size="md" />
               <div className="flex items-center gap-2">
                 {isAdmin && (
                   <NavLink
                     to="/admin"
-                    className="button-3d rounded-lg border border-neon-400/40 px-3 py-2 text-xs font-semibold text-neon-200"
+                    className="button-3d flex items-center gap-1 rounded-lg border border-neon-400/40 px-3 py-2 text-xs font-semibold text-neon-200"
                   >
+                    <Shield className="h-3 w-3" />
                     Admin
                   </NavLink>
                 )}
@@ -47,20 +51,24 @@ export default function AppLayout() {
                 </button>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {mobileNav.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    `rounded-xl px-3 py-2 text-xs font-semibold ${
-                      isActive ? "bg-neon-500/20 text-neon-200" : "text-slate-300"
-                    }`
-                  }
-                >
-                  {item.label}
-                </NavLink>
-              ))}
+            <div className="flex overflow-x-auto gap-1.5 pb-1 scrollbar-none">
+              {mobileNav.map((item) => {
+                const Icon = item.icon
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) =>
+                      `flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                        isActive ? "bg-neon-500/20 text-neon-200" : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                      }`
+                    }
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {item.label}
+                  </NavLink>
+                )
+              })}
             </div>
           </div>
           <Outlet />
