@@ -76,6 +76,58 @@ warn "Run as root or with sudo. Press Ctrl-C to abort."
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  SAVED CONFIG — skip questions on re-run
+# ─────────────────────────────────────────────────────────────────────────────
+CONFIG_FILE="${HOME}/.astranodes-deploy.conf"
+
+# List of every variable the interactive wizard collects.
+CONFIG_VARS=(
+  DOMAIN SSL_EMAIL APP_DIR APP_PORT
+  JWT_SECRET JWT_EXPIRES
+  DB_PATH UPLOAD_DIR
+  PTERO_URL PTERO_KEY PTERO_EGG PTERO_IMAGE PTERO_STARTUP PTERO_ENV
+  DISCORD_WEBHOOK DISCORD_SUPPORT_WEBHOOK
+  UPI_ID_VAL UPI_NAME_VAL
+  ADSTERRA_TOKEN ADSTERRA_DOMAIN_ID_VAL ADSTERRA_NATIVE_ID ADSTERRA_BANNER_ID_VAL
+  ADSTERRA_NATIVE_KEY ADSTERRA_BANNER_KEY ADSTERRA_NATIVE_SCRIPT
+  ADSTERRA_BANNER_SCRIPT ADSTERRA_NATIVE_CONT
+)
+
+save_config() {
+  # Persist all wizard answers so re-runs can skip the questionnaire.
+  {
+    echo "# AstraNodes deploy config — auto-generated $(date -Iseconds)"
+    for v in "${CONFIG_VARS[@]}"; do
+      # Use printf %q to safely quote values (spaces, special chars, etc.)
+      printf '%s=%q\n' "$v" "${!v:-}"
+    done
+  } > "$CONFIG_FILE"
+  chmod 600 "$CONFIG_FILE"
+}
+
+load_config() {
+  # Source the saved file; all CONFIG_VARS become available.
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+}
+
+SKIPPED_WIZARD=false
+
+if [[ -f "$CONFIG_FILE" ]]; then
+  echo -e "  ${GREEN}Found saved config from a previous run.${RESET}"
+  echo -e "  ${CYAN}${CONFIG_FILE}${RESET}"
+  echo ""
+  ask_yn USE_SAVED "Re-use saved settings? (skip all questions)" "y"
+  if [[ "$USE_SAVED" == "yes" ]]; then
+    load_config
+    SKIPPED_WIZARD=true
+    success "Loaded saved config — jumping to review."
+  fi
+fi
+
+if [[ "$SKIPPED_WIZARD" != "true" ]]; then
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  SECTION 1 — General
 # ─────────────────────────────────────────────────────────────────────────────
 header "1 / 8  General Settings"
@@ -163,10 +215,12 @@ ask_optional ADSTERRA_NATIVE_SCRIPT "Native banner script URL"       ""
 ask_optional ADSTERRA_BANNER_SCRIPT "Banner script URL"              ""
 ask_optional ADSTERRA_NATIVE_CONT   "Native banner container ID"     ""
 
+fi  # end SKIPPED_WIZARD
+
 # ─────────────────────────────────────────────────────────────────────────────
-#  SECTION 7 — Confirm
-# ─────────────────────────────────────────────────────────────────────────────
-header "8 / 8  Review & Confirm"
+#  Review & Confirm
+# ────────────────────────────────────────────────────────────────────��────────
+header "Review & Confirm"
 
 echo ""
 echo -e "  ${BOLD}Domain:${RESET}       https://${DOMAIN}"
@@ -181,6 +235,10 @@ echo -e "  ${BOLD}Egg ID:${RESET}               ${PTERO_EGG}"
 echo ""
 ask_yn CONFIRM "Proceed with deployment?" "y"
 [[ "$CONFIRM" != "yes" ]] && { warn "Aborted."; exit 0; }
+
+# Save config for future re-runs (after user confirmed)
+save_config
+success "Config saved to ${CONFIG_FILE} — next run can skip all questions."
 
 # =============================================================================
 #  INSTALL PHASE
@@ -204,6 +262,7 @@ wait_apt() {
     fi
   done
   [[ $waited -gt 0 ]] && success "apt lock released after ${waited}s"
+  return 0
 }
 
 wait_apt
