@@ -23,6 +23,8 @@ ask() {
   while true; do
     read -rp "$(echo -e "${YELLOW}?${RESET} ${prompt}${hint}: ")" value
     value="${value:-$default}"
+    # Trim leading/trailing whitespace (catches accidental trailing spaces in URLs)
+    value="$(echo -e "${value}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
     if [[ -n "$value" ]]; then
       printf -v "$var" '%s' "$value"
       return
@@ -37,7 +39,10 @@ ask_optional() {
   local hint=""
   [[ -n "$default" ]] && hint=" [${default}]"
   read -rp "$(echo -e "${YELLOW}?${RESET} ${prompt}${hint}: ")" value
-  printf -v "$var" '%s' "${value:-$default}"
+  value="${value:-$default}"
+  # Trim leading/trailing whitespace
+  value="$(echo -e "${value}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  printf -v "$var" '%s' "$value"
 }
 
 ask_yn() {
@@ -182,6 +187,26 @@ ask_yn CONFIRM "Proceed with deployment?" "y"
 # =============================================================================
 header "Installing system packages"
 
+# Wait for any background apt/dpkg process (cloud-init, unattended-upgrades, etc.)
+# that holds the lock on a freshly provisioned VPS before we try to install packages.
+wait_apt() {
+  local waited=0
+  while fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock /var/cache/apt/archives/lock \
+        /var/lib/dpkg/lock &>/dev/null; do
+    if [[ $waited -eq 0 ]]; then
+      warn "Another process holds the apt lock (cloud-init / unattended-upgrades)."
+      info "Waiting up to 3 minutes for it to finish..."
+    fi
+    sleep 5
+    waited=$((waited + 5))
+    if [[ $waited -ge 180 ]]; then
+      error "apt lock held for >3 minutes. Kill the blocking process and re-run deploy.sh."
+    fi
+  done
+  [[ $waited -gt 0 ]] && success "apt lock released after ${waited}s"
+}
+
+wait_apt
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 apt-get install -y -q curl git nginx certbot python3-certbot-nginx ufw
@@ -190,6 +215,7 @@ apt-get install -y -q curl git nginx certbot python3-certbot-nginx ufw
 if ! command -v node &>/dev/null; then
   info "Installing Node.js LTS..."
   curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+  wait_apt
   apt-get install -y -q nodejs
 else
   success "Node.js already installed: $(node -v)"
