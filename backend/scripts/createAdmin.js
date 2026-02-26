@@ -86,7 +86,7 @@ async function createAdmin() {
     console.log("\n========================================")
     console.log("Admin Credentials:")
     console.log(`  Email: ${email}`)
-    console.log(`  Password: ${password}`)
+    console.log(`  Password: ${'*'.repeat(password.length)}`)
     console.log("========================================\n")
     console.log("You can now login at /login and access /admin panel\n")
 

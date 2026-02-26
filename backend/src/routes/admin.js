@@ -2,7 +2,7 @@ import { Router } from "express"
 import { z } from "zod"
 import { validate } from "../middlewares/validate.js"
 import { requireAuth, requireAdmin } from "../middlewares/auth.js"
-import { query, getOne, runSync } from "../config/db.js"
+import { query, getOne, runSync, transaction } from "../config/db.js"
 import { pterodactyl } from "../services/pterodactyl.js"
 import { approveSubmission, rejectSubmission, deleteScreenshot } from "../services/utrService.js"
 
@@ -54,7 +54,7 @@ const couponSchema = z.object({
 
 const coinSettingSchema = z.object({
   body: z.object({
-    coins_per_minute: z.number().int().positive()
+    coins_per_minute: z.number().int().positive().max(1000)
   })
 })
 
@@ -121,17 +121,15 @@ router.delete("/users/:id", async (req, res, next) => {
       }
     }
 
-    // ── 3. Cascade delete all site data ──────────────────────────────────
-    // Delete all messages in the user's tickets (includes admin replies)
-    await runSync(
-      "DELETE FROM ticket_messages WHERE ticket_id IN (SELECT id FROM tickets WHERE user_id = ?)",
-      [userId]
-    )
-    await runSync("DELETE FROM tickets WHERE user_id = ?", [userId])
-    await runSync("DELETE FROM coupon_redemptions WHERE user_id = ?", [userId])
-    await runSync("DELETE FROM utr_submissions WHERE user_id = ?", [userId])
-    await runSync("DELETE FROM servers WHERE user_id = ?", [userId])
-    await runSync("DELETE FROM users WHERE id = ?", [userId])
+    // ── 3. Cascade delete all site data atomically ─────────────────
+    await transaction(({ runSync }) => {
+      runSync("DELETE FROM ticket_messages WHERE ticket_id IN (SELECT id FROM tickets WHERE user_id = ?)", [userId])
+      runSync("DELETE FROM tickets WHERE user_id = ?", [userId])
+      runSync("DELETE FROM coupon_redemptions WHERE user_id = ?", [userId])
+      runSync("DELETE FROM utr_submissions WHERE user_id = ?", [userId])
+      runSync("DELETE FROM servers WHERE user_id = ?", [userId])
+      runSync("DELETE FROM users WHERE id = ?", [userId])
+    })
 
     res.json({ status: "ok" })
   } catch (error) {

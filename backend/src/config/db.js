@@ -58,4 +58,40 @@ export function runSync(sql, params = []) {
   }
 }
 
+/**
+ * Run multiple operations atomically inside a SERIALIZABLE transaction.
+ * Uses better-sqlite3's synchronous transaction API with BEGIN IMMEDIATE
+ * to prevent race conditions (double-spend, coupon over-redemption, etc.).
+ *
+ * @param {(helpers: { query, getOne, runSync }) => any} fn
+ * @returns {Promise<any>} result of fn
+ *
+ * Usage:
+ *   const result = await transaction(({ query, getOne, runSync }) => {
+ *     const user = getOne("SELECT coins FROM users WHERE id = ?", [userId])
+ *     if (user.coins < price) throw Object.assign(new Error("Insufficient balance"), { statusCode: 400 })
+ *     runSync("UPDATE users SET coins = coins - ? WHERE id = ?", [price, userId])
+ *     return runSync("INSERT INTO servers (...) VALUES (...)", [...])
+ *   })
+ */
+export function transaction(fn) {
+  const txHelpers = {
+    query: (sql, params = []) => db.prepare(sql).all(params) || [],
+    getOne: (sql, params = []) => db.prepare(sql).get(params) || null,
+    runSync: (sql, params = []) => {
+      const info = db.prepare(sql).run(params)
+      return { lastID: info.lastInsertRowid, changes: info.changes }
+    }
+  }
+  try {
+    // BEGIN IMMEDIATE acquires a write lock at the start, serializing
+    // concurrent writes and preventing TOCTOU race conditions.
+    const txn = db.transaction(() => fn(txHelpers))
+    const result = txn.immediate()
+    return Promise.resolve(result)
+  } catch (err) {
+    return Promise.reject(err)
+  }
+}
+
 export { db }

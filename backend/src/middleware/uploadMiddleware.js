@@ -2,6 +2,7 @@ import multer from "multer"
 import { dirname, join, extname } from "path"
 import { fileURLToPath } from "url"
 import { existsSync, mkdirSync } from "fs"
+import { randomBytes } from "crypto"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -29,7 +30,7 @@ const storage = multer.diskStorage({
       : mimetype === "image/webp" ? ".webp"
       : ".jpg"
 
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9)
+    const uniqueSuffix = Date.now() + "-" + randomBytes(8).toString("hex")
     cb(null, `ticket-${uniqueSuffix}${safeExt}`)
   }
 })

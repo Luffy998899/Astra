@@ -23,16 +23,15 @@ function parseEnv() {
 }
 
 function handleError(error, action) {
+  // Log full details for debugging — never expose to clients
   console.error(`[PTERODACTYL] ✗ ${action} failed:`, {
     message: error.message,
     status: error.response?.status,
-    statusText: error.response?.statusText,
-    data: error.response?.data
+    statusText: error.response?.statusText
   })
   
-  const detail = error.response?.data?.errors?.[0]?.detail
-  const message = detail || error.message || "Unknown error"
-  const err = new Error(`Pterodactyl ${action} failed: ${message}`)
+  // Generic message to the user — no internal details leaked
+  const err = new Error("Server provisioning failed. Please try again or contact support.")
   err.statusCode = 502
   throw err
 }
@@ -130,8 +129,6 @@ export const pterodactyl = {
         },
         start_on_completion: true
       }
-      
-      console.log("[PTERODACTYL] Request payload:", JSON.stringify(payload, null, 2))
       
       const response = await client.post("/servers", payload)
       

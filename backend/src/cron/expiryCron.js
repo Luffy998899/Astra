@@ -1,5 +1,5 @@
 import cron from "node-cron"
-import { query, getOne, runSync } from "../config/db.js"
+import { query, getOne, runSync, transaction } from "../config/db.js"
 import { addDays, getDurationDays } from "../utils/durations.js"
 import { pterodactyl } from "../services/pterodactyl.js"
 
@@ -42,19 +42,29 @@ async function processExpiring() {
     const balanceField = getBalanceField(server.plan_type)
 
     if (user[balanceField] >= price) {
-      const baseDate = new Date(server.expires_at)
-      const startDate = baseDate > now ? server.expires_at : nowIso
-      const nextExpiry = addDays(startDate, getDurationDays(plan.duration_type, plan.duration_days))
-
-      await runSync(
-        `UPDATE users SET ${balanceField} = ${balanceField} - ? WHERE id = ?`,
-        [price, user.id]
-      )
-      await runSync(
-        "UPDATE servers SET expires_at = ? WHERE id = ? AND status = 'active'",
-        [nextExpiry, server.id]
-      )
-      continue
+      // Atomic balance deduction + expiry extension inside a transaction
+      // to prevent double-charging from concurrent cron ticks
+      try {
+        await transaction(({ getOne: txGetOne, runSync: txRun }) => {
+          // Re-check balance inside the lock to prevent double-spend
+          const freshUser = txGetOne("SELECT id, coins, balance FROM users WHERE id = ?", [server.user_id])
+          if (!freshUser || freshUser[balanceField] < price) {
+            throw new Error("INSUFFICIENT_BALANCE")
+          }
+          txRun(`UPDATE users SET ${balanceField} = ${balanceField} - ? WHERE id = ?`, [price, user.id])
+          const baseDate = new Date(server.expires_at)
+          const startDate = baseDate > now ? server.expires_at : nowIso
+          const nextExpiry = addDays(startDate, getDurationDays(plan.duration_type, plan.duration_days))
+          txRun("UPDATE servers SET expires_at = ? WHERE id = ? AND status = 'active'", [nextExpiry, server.id])
+        })
+        continue
+      } catch (txErr) {
+        if (txErr.message !== "INSUFFICIENT_BALANCE") {
+          console.error(`[CRON] Transaction failed for server ${server.id}:`, txErr.message)
+          continue
+        }
+        // Fall through to suspend if balance became insufficient
+      }
     }
 
     try {

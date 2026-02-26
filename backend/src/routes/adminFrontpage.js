@@ -75,7 +75,10 @@ const sectionSchema = z.object({
     section: z.enum(["hero", "features", "about", "stats", "footer", "features_page", "locations_page", "about_page", "knowledgebase_page", "status_page"])
   }),
   body: z.object({
-    content: z.any()
+    content: z.unknown().refine(
+      (v) => JSON.stringify(v).length < 100_000,
+      { message: "Content payload too large (max 100KB JSON)" }
+    )
   })
 })
 

@@ -2,6 +2,7 @@
  * Socket.io singleton — import `io` anywhere in routes to emit real-time events
  */
 import { Server } from "socket.io"
+import { verifyToken } from "./jwt.js"
 
 let io = null
 
@@ -18,8 +19,27 @@ export function initSocket(httpServer, corsOrigin) {
     transports: ["websocket", "polling"]
   })
 
+  // Authenticate every socket connection via JWT
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token
+    if (!token) {
+      // Allow unauthenticated connections for public broadcasts (plans, frontpage)
+      // but tag them so future private events can be gated
+      socket.data.authenticated = false
+      return next()
+    }
+    try {
+      const decoded = verifyToken(token)
+      socket.data.user = decoded
+      socket.data.authenticated = true
+      next()
+    } catch {
+      next(new Error("Authentication failed"))
+    }
+  })
+
   io.on("connection", (socket) => {
-    console.log(`[Socket] Client connected: ${socket.id}`)
+    console.log(`[Socket] Client connected: ${socket.id} auth=${socket.data.authenticated}`)
     socket.on("disconnect", () => {
       console.log(`[Socket] Client disconnected: ${socket.id}`)
     })

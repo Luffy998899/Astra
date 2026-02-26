@@ -1,5 +1,6 @@
 import { Router } from "express"
 import { z } from "zod"
+import { randomBytes } from "crypto"
 import { validate } from "../middlewares/validate.js"
 import { query, getOne, runSync } from "../config/db.js"
 import { hashPassword, verifyPassword } from "../utils/password.js"
@@ -28,22 +29,40 @@ router.post("/register", authRateLimiter, validate(authSchema), async (req, res,
       return res.status(409).json({ error: "Email already registered" })
     }
 
-    const username = email.split("@")[0]
-    const pteroId = await pterodactyl.createUser({
-      email,
-      username,
-      firstName: username,
-      lastName: "User",
-      password
-    })
+    // Sanitize username: strip non-alphanumeric chars, truncate, ensure non-empty
+    const username = email.split("@")[0].replace(/[^a-zA-Z0-9-]/g, "").slice(0, 20) || `user${Date.now()}`
+    // Generate a random password for Pterodactyl — never send the user's real
+    // password to a third-party panel. If the panel is compromised, user
+    // credentials remain safe.
+    const pteroPassword = randomBytes(24).toString("base64url")
+    let pteroId
+    try {
+      pteroId = await pterodactyl.createUser({
+        email,
+        username,
+        firstName: username,
+        lastName: "User",
+        password: pteroPassword
+      })
+    } catch (pteroErr) {
+      console.error("[AUTH] Pterodactyl user creation failed:", pteroErr.message)
+      return res.status(502).json({ error: "Account provisioning failed. Please try again later." })
+    }
 
     const hash = await hashPassword(password)
     const ip = req.ip
 
-    const info = await runSync(
-      "INSERT INTO users (email, password_hash, ip_address, last_login_ip, pterodactyl_user_id) VALUES (?, ?, ?, ?, ?)",
-      [email, hash, ip, ip, pteroId]
-    )
+    let info
+    try {
+      info = await runSync(
+        "INSERT INTO users (email, password_hash, ip_address, last_login_ip, pterodactyl_user_id) VALUES (?, ?, ?, ?, ?)",
+        [email, hash, ip, ip, pteroId]
+      )
+    } catch (dbErr) {
+      // Rollback: delete orphaned Pterodactyl user if DB insert fails
+      try { await pterodactyl.deleteUser(pteroId) } catch { /* best-effort */ }
+      throw dbErr
+    }
 
     // Never SELECT * — keep password_hash out of memory
     const user = await getOne(
