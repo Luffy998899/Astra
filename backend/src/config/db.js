@@ -1,4 +1,4 @@
-import sqlite3 from "sqlite3"
+import Database from "better-sqlite3"
 import { env } from "./env.js"
 import fs from "fs"
 import path from "path"
@@ -11,57 +11,51 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true })
 }
 
-const db = new (sqlite3.verbose()).Database(env.DB_PATH, (err) => {
-  if (err) {
-    console.error("[DB] ✗ Database connection error:", err)
-    process.exit(1)
-  } else {
-    console.log("[DB] ✓ Database connection successful")
-  }
-})
+let db
+try {
+  db = new Database(env.DB_PATH)
+  console.log("[DB] ✓ Database connection successful")
+} catch (err) {
+  console.error("[DB] ✗ Database connection error:", err)
+  process.exit(1)
+}
 
-db.configure("busyTimeout", 5000)
-db.run("PRAGMA journal_mode=WAL", (err) => {
-  if (err) console.error("[DB] WAL error:", err)
-  else console.log("[DB] ✓ WAL mode enabled")
-})
-db.run("PRAGMA foreign_keys=ON", (err) => {
-  if (err) console.error("[DB] Foreign keys error:", err)
-  else console.log("[DB] ✓ Foreign keys enabled")
-})
-db.run("PRAGMA secure_delete=ON", (err) => {
-  if (err) console.error("[DB] Secure delete error:", err)
-  else console.log("[DB] ✓ Secure delete enabled")
-})
+// better-sqlite3 is synchronous and handles busy internally
+db.pragma("busy_timeout = 5000")
+db.pragma("journal_mode = WAL")
+db.pragma("foreign_keys = ON")
+db.pragma("secure_delete = ON")
+console.log("[DB] ✓ WAL mode, foreign keys, secure_delete enabled")
 
-// Promise-based wrapper for db.all()
+// Keep the same async API surface so no other files need changes.
+// better-sqlite3 is synchronous under the hood — wrapping in Promise
+// keeps all callers using `await` working without modification.
+
 export function query(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err)
-      else resolve(rows || [])
-    })
-  })
+  try {
+    const rows = db.prepare(sql).all(params)
+    return Promise.resolve(rows || [])
+  } catch (err) {
+    return Promise.reject(err)
+  }
 }
 
-// Promise-based wrapper for db.get()
 export function getOne(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err)
-      else resolve(row || null)
-    })
-  })
+  try {
+    const row = db.prepare(sql).get(params)
+    return Promise.resolve(row || null)
+  } catch (err) {
+    return Promise.reject(err)
+  }
 }
 
-// Promise-based wrapper for db.run()
 export function runSync(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err)
-      else resolve({ lastID: this.lastID, changes: this.changes })
-    })
-  })
+  try {
+    const info = db.prepare(sql).run(params)
+    return Promise.resolve({ lastID: info.lastInsertRowid, changes: info.changes })
+  } catch (err) {
+    return Promise.reject(err)
+  }
 }
 
 export { db }

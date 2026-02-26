@@ -413,7 +413,9 @@ export const api = {
   getPaymentSettings: async () => {
     const res = await fetch(`${API_URL}/settings/payment`)
     if (!res.ok) return { upiId: null, upiName: null }
-    return res.json()
+    const json = await res.json()
+    // API wraps data in { success, message, data: {...} }
+    return json.data || json
   },
 
   // Tickets
