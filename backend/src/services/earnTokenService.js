@@ -21,7 +21,7 @@ import { randomBytes } from "crypto"
 // Fine for single-process Node.js (SQLite-backed app). Tokens are short-lived.
 const tokens = new Map()
 
-const MIN_VIEW_MS  = 0        // token valid immediately (frontend enforces view time via countdown)
+const MIN_VIEW_MS  = 4_000   // 4 seconds minimum server-side ad view time
 const TOKEN_TTL_MS = 90_000  // token expires 90s after issue — covers full 60s cooldown + buffer
 
 // Purge stale tokens every 60 seconds to prevent memory growth

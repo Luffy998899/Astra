@@ -41,3 +41,14 @@ export const coinsSessionLimiter = rateLimit({
   keyGenerator: (req) => `coins_session_${req.user?.id ?? req.ip}`,
   message: { error: "Too many session requests. Slow down." }
 })
+
+// Purchase/renew limiter: max 5 per 60s per user.
+// Prevents rapid-fire requests that could exploit race conditions.
+export const purchaseLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `purchase_${req.user?.id ?? req.ip}`,
+  message: { error: "Too many purchase requests. Please slow down." }
+})
