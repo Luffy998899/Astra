@@ -48,12 +48,38 @@ info "Install directory: ${APP_DIR}"
 # ── Git pull ────────────────────────────────────────────────────────────────
 header "Pulling latest code"
 
-if [[ -d "${APP_DIR}/.git" ]]; then
-  git -C "$APP_DIR" fetch --all
-  git -C "$APP_DIR" pull --ff-only
-  success "Code updated"
+# The git repo lives where this script is (e.g. ~/Astra).
+# APP_DIR (/opt/astranodes) is a synced copy — it has no .git.
+REPO_DIR="$SCRIPT_DIR"
+
+if [[ -d "${REPO_DIR}/.git" ]]; then
+  git -C "$REPO_DIR" fetch --all
+  git -C "$REPO_DIR" pull --ff-only
+  success "Code pulled in ${REPO_DIR}"
+elif [[ -d "${APP_DIR}/.git" ]]; then
+  # Fallback: git is directly in APP_DIR
+  REPO_DIR="$APP_DIR"
+  git -C "$REPO_DIR" fetch --all
+  git -C "$REPO_DIR" pull --ff-only
+  success "Code pulled in ${REPO_DIR}"
 else
-  warn "No .git directory found — skipping git pull. Copy new code manually if needed."
+  warn "No .git directory found in ${REPO_DIR} or ${APP_DIR} — skipping git pull."
+fi
+
+# ── Sync code to APP_DIR ─────────────────────────────────────────────────────
+if [[ "$REPO_DIR" != "$APP_DIR" && -d "$REPO_DIR/backend" ]]; then
+  header "Syncing code to install directory"
+  # Mirror everything except data that must survive across updates
+  rsync -a \
+    --exclude='.git' \
+    --exclude='backend/.env' \
+    --exclude='backend/data/' \
+    --exclude='backend/uploads/' \
+    --exclude='backend/node_modules/' \
+    --exclude='frontend/node_modules/' \
+    --exclude='frontend/dist/' \
+    "${REPO_DIR}/" "${APP_DIR}/"
+  success "Code synced from ${REPO_DIR} → ${APP_DIR}"
 fi
 
 # ── Backend dependencies ─────────────────────────────────────────────────────
