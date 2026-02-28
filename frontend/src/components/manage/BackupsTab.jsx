@@ -32,6 +32,7 @@ export default function BackupsTab({ serverId }) {
 
   useEffect(() => {
     loadBackups()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverId])
 
   const handleCreate = async () => {

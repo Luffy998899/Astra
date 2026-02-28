@@ -52,6 +52,7 @@ export default function FilesTab({ serverId }) {
 
   useEffect(() => {
     loadFiles("/")
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverId])
 
   const navigateTo = (dir) => {

@@ -132,7 +132,10 @@ function ResetPasswordModal({ open, onClose }) {
 }
 
 export default function AccountSettings() {
-  const [user, setUser] = useState(null)
+  const [user] = useState(() => {
+    const stored = localStorage.getItem("user")
+    return stored ? JSON.parse(stored) : null
+  })
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
   const navigate = useNavigate()
 
@@ -142,8 +145,6 @@ export default function AccountSettings() {
       navigate("/login")
       return
     }
-    const stored = localStorage.getItem("user")
-    if (stored) setUser(JSON.parse(stored))
   }, [navigate])
 
   return (

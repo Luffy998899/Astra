@@ -34,10 +34,6 @@ export default function Contact() {
   const [sending, setSending] = useState(false)
   const isLoggedIn = Boolean(localStorage.getItem("token"))
 
-  function handleChange(e) {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
-  }
-
   async function handleSubmit(e) {
     e.preventDefault()
     if (!form.subject.trim() || !form.message.trim()) {

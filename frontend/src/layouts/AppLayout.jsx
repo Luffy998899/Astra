@@ -3,7 +3,6 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { LogOut, LayoutDashboard, Package, Coins, Server, CreditCard, Ticket, LifeBuoy, Shield } from "lucide-react"
 import Sidebar from "../components/Sidebar.jsx"
 import Logo from "../components/Logo.jsx"
-import { getBackendBaseUrl } from "../services/api.js"
 
 const mobileNav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },

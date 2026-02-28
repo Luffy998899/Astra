@@ -71,7 +71,6 @@ export default function Plans() {
 
     const loadPlans = async () => {
       try {
-        const token = localStorage.getItem("token")
         const [coin, real] = await Promise.all([api.getCoinPlans(), api.getRealPlans()])
         setCoinPlans(coin || [])
         setRealPlans(real || [])

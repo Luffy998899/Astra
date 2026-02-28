@@ -1,5 +1,5 @@
 import { useState, useEffect, cloneElement, isValidElement } from "react"
-import { useNavigate, Link } from "react-router-dom"
+import { Link } from "react-router-dom"
 import AdminNav from "../components/AdminNav.jsx"
 import SectionHeader from "../components/SectionHeader.jsx"
 import { api } from "../services/api.js"
@@ -23,7 +23,6 @@ const ICON_OPTIONS = [
 ]
 
 export default function AdminFrontPage() {
-  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(null)
   const [content, setContent] = useState({})
@@ -32,6 +31,7 @@ export default function AdminFrontPage() {
 
   useEffect(() => {
     loadContent()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function loadContent() {

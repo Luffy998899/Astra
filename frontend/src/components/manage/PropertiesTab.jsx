@@ -26,6 +26,7 @@ export default function PropertiesTab({ serverId }) {
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [serverId])
 
   const handleChange = (key, value) => {
