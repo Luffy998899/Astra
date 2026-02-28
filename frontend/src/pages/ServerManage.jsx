@@ -101,7 +101,6 @@ export default function ServerManage() {
   }
 
   const srv = serverInfo?.server
-  const res = serverInfo?.resources
   const defaultAlloc = srv?.allocations?.find((a) => a.is_default) || srv?.allocations?.[0]
 
   // Resolve display IP: prefer ip_alias, then node_fqdn if allocation IP is unusable (0.0.0.0 or private)

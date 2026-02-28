@@ -57,6 +57,7 @@ export default function TicketDetail() {
     }
 
     loadTicket()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, navigate])
 
   useEffect(() => {

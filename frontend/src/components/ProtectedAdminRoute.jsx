@@ -15,11 +15,11 @@ export default function ProtectedAdminRoute({ children }) {
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem("user") || "{}") } catch { return {} }
   })
-  const [checking, setChecking] = useState(true)
+  const [checking, setChecking] = useState(() => !!token)
 
   // Always verify the role from the server — don't trust potentially stale localStorage
   useEffect(() => {
-    if (!token) { setChecking(false); return }
+    if (!token) return
     fetch(`${getApiUrl()}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
       .then(u => {

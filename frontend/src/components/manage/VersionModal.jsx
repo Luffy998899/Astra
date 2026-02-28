@@ -13,6 +13,7 @@ export default function VersionModal({ isOpen, onClose, project, serverId, onIns
     if (isOpen && project) {
       loadVersions()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, project])
 
   const loadVersions = async () => {

@@ -22,6 +22,7 @@ export default function VerifyEmail() {
     }
 
     verifyEmail(token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const verifyEmail = async (token) => {
@@ -41,7 +42,7 @@ export default function VerifyEmail() {
         }
         setMessage(data.error || 'Verification failed');
       }
-    } catch (error) {
+    } catch (_err) {
       setStatus('error');
       setMessage('Failed to verify email. Please try again.');
     }
@@ -65,7 +66,7 @@ export default function VerifyEmail() {
       const data = await response.json();
       setMessage(data.message);
       setStatus('success');
-    } catch (error) {
+    } catch (_err) {
       setMessage('Failed to resend verification email');
     } finally {
       setResending(false);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Link } from "react-router-dom"
 import Logo from "../components/Logo.jsx"
 import { AlertCircle } from "lucide-react"
@@ -19,16 +19,14 @@ const getApiUrl = () => {
 const API_URL = getApiUrl()
 
 export default function Register() {
-  const [error, setError] = useState("")
-
-  useEffect(() => {
-    // Check for OAuth errors
+  const [error] = useState(() => {
     const oauthError = localStorage.getItem('oauth_error');
     if (oauthError) {
-      setError(oauthError);
       localStorage.removeItem('oauth_error');
+      return oauthError;
     }
-  }, [])
+    return "";
+  })
 
   const handleGoogleLogin = () => {
     window.location.href = `${API_URL}/auth/google`;

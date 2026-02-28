@@ -4,7 +4,6 @@ import {
 } from "lucide-react"
 
 export default function PlanCard({ plan, isSelected, onClick, icon: IconComponent }) {
-  const isPremium = plan.real_cost > 0 || (plan.coins && plan.coins >= 100)
   const isPopular = plan.name?.toLowerCase().includes("premium") || plan.coins >= 50
   
   return (

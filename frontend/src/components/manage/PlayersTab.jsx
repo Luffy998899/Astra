@@ -78,7 +78,7 @@ export default function PlayersTab({ serverId }) {
     setError("")
     setSuccess("")
     try {
-      const data = await api.serverPlayerAction(token, serverId, action, playerName)
+      await api.serverPlayerAction(token, serverId, action, playerName)
       setSuccess(`${action.replace("_", " ")} → ${playerName}`)
       setTimeout(() => setSuccess(""), 4000)
       // Refresh player list after kick/ban

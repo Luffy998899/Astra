@@ -23,6 +23,7 @@ export default function AdminTickets() {
       return
     }
     loadTickets()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, navigate])
 
   const loadTickets = async () => {

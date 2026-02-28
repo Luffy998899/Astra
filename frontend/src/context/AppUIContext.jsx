@@ -72,7 +72,7 @@ export function AppUIProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    refreshSiteSettings()
+    refreshSiteSettings() // eslint-disable-line react-hooks/set-state-in-effect
   }, [refreshSiteSettings])
 
   useEffect(() => {
@@ -121,6 +121,7 @@ export function AppUIProvider({ children }) {
   return <AppUIContext.Provider value={value}>{children}</AppUIContext.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAppUI() {
   const context = useContext(AppUIContext)
   if (!context) {

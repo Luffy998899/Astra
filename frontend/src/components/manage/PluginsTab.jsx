@@ -20,7 +20,7 @@ export default function PluginsTab({ serverId }) {
   const [installedPlugins, setInstalledPlugins] = useState([])
   const [installedMods, setInstalledMods] = useState([])
   const [searching, setSearching] = useState(false)
-  const [installing, setInstalling] = useState("")
+  const [, setInstalling] = useState("")
   const [deleting, setDeleting] = useState("")
   const [loadingInstalled, setLoadingInstalled] = useState(true)
   const [error, setError] = useState("")
@@ -45,6 +45,7 @@ export default function PluginsTab({ serverId }) {
   // Check which sources are available
   useEffect(() => {
     api.serverGetSources(token, serverId).then((s) => setHasCF(s.curseforge)).catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverId])
 
   // Load installed plugins + mods
@@ -62,6 +63,7 @@ export default function PluginsTab({ serverId }) {
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadInstalled() }, [serverId])
 
   // Load featured content on mount or when type/source/page changes
@@ -72,7 +74,7 @@ export default function PluginsTab({ serverId }) {
       const data = await api.serverSearchPlugins(token, serverId, "", { type, source, offset: pg * ITEMS_PER_PAGE, limit: ITEMS_PER_PAGE })
       setResults(data.results || [])
       setTotalResults(data.total || 0)
-    } catch (err) {
+    } catch (_err) {
       // Silently fail for featured load
     } finally {
       setSearching(false)
@@ -90,6 +92,7 @@ export default function PluginsTab({ serverId }) {
     } else {
       loadFeatured(page)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverId, type, source, page])
 
   // Search

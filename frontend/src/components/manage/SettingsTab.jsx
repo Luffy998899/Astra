@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Loader2, Cpu, HardDrive, MemoryStick, Network } from "lucide-react"
+import { Loader2, Cpu, HardDrive, MemoryStick } from "lucide-react"
 import { api } from "../../services/api.js"
 
 function ResourceCard({ icon: Icon, label, value, max, unit }) {
@@ -33,11 +33,11 @@ export default function SettingsTab({ serverId }) {
   const token = localStorage.getItem("token")
 
   useEffect(() => {
-    setLoading(true)
     api.serverGetSettings(token, serverId)
       .then((data) => setSettings(data))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverId])
 
   if (loading) {

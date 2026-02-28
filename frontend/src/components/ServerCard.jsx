@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { MapPin, Server, Clock, Cpu, Database, HardDrive } from "lucide-react"
 import Badge from "./Badge.jsx"
